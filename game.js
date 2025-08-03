@@ -127,6 +127,18 @@ class PingPongGame {
         // 按键状态
         this.keys = {};
         
+        // 手柄相关
+        this.gamepads = {};
+        this.gamepadConnected = false;
+        
+        // 手柄光标
+        this.cursor = {
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+            visible: false,
+            speed: 8
+        };
+        
         // 记录最后一次击球的玩家
         this.lastHitPlayer = null; // 'left' 或 'right'
         
@@ -187,8 +199,17 @@ class PingPongGame {
         };
         
         this.initEventListeners();
+        this.initGamepadSupport();
         this.initializeTableSize();
         this.updateStartHint(); // 初始化开始提示
+        this.startScreenLoop(); // 开始界面循环处理手柄输入
+    }
+    
+    startScreenLoop() {
+        if (this.gameState === 'start') {
+            this.handleGamepadInput(); // 处理手柄输入和光标显示
+            requestAnimationFrame(() => this.startScreenLoop());
+        }
     }
     
     async initDatabase() {
@@ -271,6 +292,7 @@ class PingPongGame {
     hideLeaderboard() {
         this.leaderboard.style.display = 'none';
         this.startScreen.style.display = 'block';
+        this.startScreenLoop(); // 重新启动开始界面循环
     }
     
     async loadScores() {
@@ -590,6 +612,186 @@ class PingPongGame {
         this.ctx.restore();
     }
     
+    initGamepadSupport() {
+        // 监听手柄连接和断开事件
+        window.addEventListener('gamepadconnected', (e) => {
+            console.log('手柄已连接:', e.gamepad.id);
+            this.gamepads[e.gamepad.index] = e.gamepad;
+            this.gamepadConnected = true;
+        });
+        
+        window.addEventListener('gamepaddisconnected', (e) => {
+            console.log('手柄已断开:', e.gamepad.id);
+            delete this.gamepads[e.gamepad.index];
+            this.gamepadConnected = Object.keys(this.gamepads).length > 0;
+        });
+    }
+    
+    updateGamepads() {
+        const gamepads = navigator.getGamepads();
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i]) {
+                this.gamepads[i] = gamepads[i];
+                this.gamepadConnected = true;
+            }
+        }
+    }
+    
+    handleGamepadInput() {
+        this.updateGamepads();
+        
+        let hasConnectedGamepad = false;
+        for (let id in this.gamepads) {
+            const gamepad = this.gamepads[id];
+            if (!gamepad) continue;
+            
+            hasConnectedGamepad = true;
+            
+            // 在开始界面，使用左摇杆控制光标
+            if (this.gameState === 'start') {
+                const leftX = gamepad.axes[0]; // 左摇杆X轴
+                const leftY = gamepad.axes[1]; // 左摇杆Y轴
+                
+                // 显示光标
+                this.cursor.visible = true;
+                
+                // 移动光标
+                if (Math.abs(leftX) > 0.2) {
+                    this.cursor.x += leftX * this.cursor.speed;
+                    this.cursor.x = Math.max(0, Math.min(window.innerWidth, this.cursor.x));
+                }
+                if (Math.abs(leftY) > 0.2) {
+                    this.cursor.y += leftY * this.cursor.speed;
+                    this.cursor.y = Math.max(0, Math.min(window.innerHeight, this.cursor.y));
+                }
+                
+                // A键点击（通常是按钮0）
+                if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
+                    this.handleGamepadClick();
+                }
+                
+                // Start按键开始游戏
+                if (gamepad.buttons[9] && gamepad.buttons[9].pressed) {
+                    this.startGame();
+                }
+                
+                // 更新光标显示
+                this.updateCursorDisplay();
+            } else {
+                // 在游戏中隐藏光标
+                this.cursor.visible = false;
+            }
+            
+            // 游戏进行中的控制
+            if (this.gameState === 'playing') {
+                // 左侧玩家使用第一个手柄或键盘模拟
+                if (parseInt(id) === 0) {
+                    // 左摇杆或十字键控制左侧球拍
+                    const leftY = gamepad.axes[1]; // 左摇杆Y轴
+                    const dpadUp = gamepad.buttons[12] && gamepad.buttons[12].pressed;
+                    const dpadDown = gamepad.buttons[13] && gamepad.buttons[13].pressed;
+                    
+                    if (leftY < -0.3 || dpadUp) {
+                        if (this.leftPaddle.y > 0) {
+                            const leftSpeed = this.leftPaddle.speed * this.leftCharacter.paddleSpeedMultiplier;
+                            this.leftPaddle.y -= leftSpeed;
+                        }
+                    }
+                    if (leftY > 0.3 || dpadDown) {
+                        if (this.leftPaddle.y < this.canvas.height - this.leftPaddle.height) {
+                            const leftSpeed = this.leftPaddle.speed * this.leftCharacter.paddleSpeedMultiplier;
+                            this.leftPaddle.y += leftSpeed;
+                        }
+                    }
+                }
+                
+                // 右侧玩家使用第二个手柄或第一个手柄的右摇杆
+                if (parseInt(id) === 1 || (parseInt(id) === 0 && Object.keys(this.gamepads).length === 1)) {
+                    // 如果只有一个手柄，右摇杆控制右侧球拍
+                    const rightY = parseInt(id) === 1 ? gamepad.axes[1] : gamepad.axes[3]; // 左摇杆或右摇杆Y轴
+                    const dpadLeft = gamepad.buttons[14] && gamepad.buttons[14].pressed;
+                    const dpadRight = gamepad.buttons[15] && gamepad.buttons[15].pressed;
+                    
+                    if (rightY < -0.3 || dpadLeft) {
+                        if (this.rightPaddle.y > 0) {
+                            const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier;
+                            this.rightPaddle.y -= rightSpeed;
+                        }
+                    }
+                    if (rightY > 0.3 || dpadRight) {
+                        if (this.rightPaddle.y < this.canvas.height - this.rightPaddle.height) {
+                            const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier;
+                            this.rightPaddle.y += rightSpeed;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 如果没有手柄连接，隐藏光标
+        if (!hasConnectedGamepad) {
+            this.cursor.visible = false;
+        }
+    }
+    
+    handleGamepadClick() {
+        // 获取点击位置下的元素
+        const elementAtCursor = document.elementFromPoint(this.cursor.x, this.cursor.y);
+        if (elementAtCursor) {
+            // 模拟点击
+            const clickEvent = new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+                clientX: this.cursor.x,
+                clientY: this.cursor.y
+            });
+            elementAtCursor.dispatchEvent(clickEvent);
+        }
+    }
+    
+    updateCursorDisplay() {
+        // 移除现有的光标
+        const existingCursor = document.getElementById('gamepad-cursor');
+        if (existingCursor) {
+            existingCursor.remove();
+        }
+        
+        // 如果光标可见，创建并显示光标
+        if (this.cursor.visible) {
+            const cursorElement = document.createElement('div');
+            cursorElement.id = 'gamepad-cursor';
+            cursorElement.style.cssText = `
+                position: fixed;
+                left: ${this.cursor.x - 10}px;
+                top: ${this.cursor.y - 10}px;
+                width: 20px;
+                height: 20px;
+                background: radial-gradient(circle, #00ff00 0%, #008800 70%, transparent 100%);
+                border: 2px solid #ffffff;
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 10000;
+                box-shadow: 0 0 10px #00ff00;
+            `;
+            document.body.appendChild(cursorElement);
+        }
+    }
+    
+    triggerGamepadVibration(duration = 200, intensity = 0.5) {
+        for (let id in this.gamepads) {
+            const gamepad = this.gamepads[id];
+            if (gamepad && gamepad.vibrationActuator) {
+                gamepad.vibrationActuator.playEffect('dual-rumble', {
+                    startDelay: 0,
+                    duration: duration,
+                    weakMagnitude: intensity * 0.7,
+                    strongMagnitude: intensity
+                }).catch(e => console.log('震动效果播放失败:', e));
+            }
+        }
+    }
+    
     initEventListeners() {
         document.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
@@ -753,6 +955,9 @@ class PingPongGame {
         // 重置名字设置状态
         this.resetNameInputs();
         
+        // 重新开始开始界面循环
+        this.startScreenLoop();
+        
         // 背景音乐继续播放，只重置位置
         this.backgroundMusic.currentTime = 0;
     }
@@ -798,23 +1003,26 @@ class PingPongGame {
     }
     
     updatePaddles() {
+        // 处理手柄输入
+        this.handleGamepadInput();
+        
         // 计算增强后的速度
         const leftSpeed = this.leftPaddle.speed * this.leftCharacter.paddleSpeedMultiplier;
         const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier;
         
-        // 左侧球拍控制 (A/Z)
-        if (this.keys['a'] && this.leftPaddle.y > 0) {
+        // 左侧球拍控制 (A/Z或A/S)
+        if ((this.keys['a'] || this.keys['w']) && this.leftPaddle.y > 0) {
             this.leftPaddle.y -= leftSpeed;
         }
-        if (this.keys['z'] && this.leftPaddle.y < this.canvas.height - this.leftPaddle.height) {
+        if ((this.keys['z'] || this.keys['s']) && this.leftPaddle.y < this.canvas.height - this.leftPaddle.height) {
             this.leftPaddle.y += leftSpeed;
         }
         
-        // 右侧球拍控制 (上下箭头)
-        if (this.keys['arrowup'] && this.rightPaddle.y > 0) {
+        // 右侧球拍控制 (上下箭头或左右箭头)
+        if ((this.keys['arrowup'] || this.keys['arrowleft']) && this.rightPaddle.y > 0) {
             this.rightPaddle.y -= rightSpeed;
         }
-        if (this.keys['arrowdown'] && this.rightPaddle.y < this.canvas.height - this.rightPaddle.height) {
+        if ((this.keys['arrowdown'] || this.keys['arrowright']) && this.rightPaddle.y < this.canvas.height - this.rightPaddle.height) {
             this.rightPaddle.y += rightSpeed;
         }
         
@@ -880,6 +1088,9 @@ class PingPongGame {
             this.hitSound.currentTime = 0; // 重置播放位置以便快速连续播放
             this.hitSound.play().catch(e => console.log('音效播放失败:', e));
             
+            // 触发手柄震动
+            this.triggerGamepadVibration(150, 0.6);
+            
             // 根据击中位置调整角度
             let hitPos = (this.ball.y - this.leftPaddle.y) / this.leftPaddle.height;
             this.ball.dy = (hitPos - 0.5) * 8;
@@ -898,6 +1109,9 @@ class PingPongGame {
             // 播放击球音效
             this.hitSound.currentTime = 0; // 重置播放位置以便快速连续播放
             this.hitSound.play().catch(e => console.log('音效播放失败:', e));
+            
+            // 触发手柄震动
+            this.triggerGamepadVibration(150, 0.6);
             
             // 根据击中位置调整角度
             let hitPos = (this.ball.y - this.rightPaddle.y) / this.rightPaddle.height;
