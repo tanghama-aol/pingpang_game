@@ -13,19 +13,30 @@
             font-family: Arial, sans-serif;
             overflow: hidden;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
         }
         canvas {
             border: 2px solid #fff;
             background: #111;
         }
         .ui {
+            position: relative;
+            text-align: center;
+        }
+        .ui.absolute {
             position: absolute;
-            top: 20px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
+            transform: translate(-50%, -50%);
             text-align: center;
             z-index: 10;
         }
@@ -35,9 +46,10 @@
             align-items: center;
             width: 600px;
             padding: 10px 20px;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.8);
             border-radius: 10px;
-            border: 1px solid #333;
+            border: 2px solid #444;
+            margin-bottom: 10px;
         }
         .player-info {
             text-align: center;
@@ -107,30 +119,72 @@
         .restart-hint {
             font-size: 18px;
         }
+        .player-setup {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .player-input {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .player-input label {
+            font-size: 18px;
+            color: #ccc;
+            min-width: 120px;
+            text-align: right;
+        }
+        .player-input input {
+            padding: 8px 12px;
+            font-size: 16px;
+            border: 2px solid #333;
+            border-radius: 5px;
+            background: #222;
+            color: #fff;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .player-input input:focus {
+            border-color: #ffff00;
+        }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="400"></canvas>
-    
-    <div class="ui" id="gameUI">
-        <div class="scoreboard">
-            <div class="player-info">
-                <div class="player-name">小朋友</div>
-                <div class="player-score" id="leftScore">0</div>
-            </div>
-            <div class="game-time">
-                <div class="time-label">游戏时间</div>
-                <div class="time-display" id="gameTime">00:00</div>
-            </div>
-            <div class="player-info">
-                <div class="player-name">唐林</div>
-                <div class="player-score" id="rightScore">0</div>
+    <div class="game-container">
+        <div class="ui" id="gameUI">
+            <div class="scoreboard">
+                <div class="player-info">
+                    <div class="player-name" id="leftPlayerDisplay">小鹏友</div>
+                    <div class="player-score" id="leftScore">0</div>
+                </div>
+                <div class="game-time">
+                    <div class="time-label">游戏时间</div>
+                    <div class="time-display" id="gameTime">00:00</div>
+                </div>
+                <div class="player-info">
+                    <div class="player-name" id="rightPlayerDisplay">唐林</div>
+                    <div class="player-score" id="rightScore">0</div>
+                </div>
             </div>
         </div>
+        
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
     </div>
-
-    <div class="ui" id="startScreen" style="display: block;">
+    
+    <div class="ui absolute" id="startScreen" style="display: block;">
         <div class="game-title">唐林的乒乓球</div>
+        <div class="player-setup">
+            <div class="player-input">
+                <label for="leftPlayerName">左侧玩家名字：</label>
+                <input type="text" id="leftPlayerName" value="小鹏友" maxlength="10">
+            </div>
+            <div class="player-input">
+                <label for="rightPlayerName">右侧玩家名字：</label>
+                <input type="text" id="rightPlayerName" value="唐林" maxlength="10">
+            </div>
+        </div>
         <div class="instructions">
             游戏玩法：<br>
             左侧玩家：A键（上移）、Z键（下移）<br>
@@ -138,7 +192,7 @@
             目标：将球打过对方，球未被接住则得分<br>
             规则：先到10分者获胜
         </div>
-        <div class="start-hint">按任意键开始游戏</div>
+        <div class="start-hint">按 SPACE 开始游戏</div>
     </div>
 
     <div class="game-over" id="gameOverScreen" style="display: none;">
