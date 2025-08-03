@@ -17,6 +17,8 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            transform: scale(0.75);
+            transform-origin: center center;
         }
         .game-container {
             display: flex;
@@ -59,7 +61,7 @@
             display: none; /* 在开始界面隐藏计分板 */
             justify-content: space-between;
             align-items: center;
-            width: 1200px;
+            width: 900px;
             padding: 20px 40px;
             background: rgba(0,0,0,0.8);
             border-radius: 10px;
@@ -436,7 +438,7 @@
             </div>
         </div>
         
-        <canvas id="gameCanvas" width="1840" height="800"></canvas>
+        <canvas id="gameCanvas" width="1380" height="600"></canvas>
     </div>
     
     <div class="ui absolute" id="startScreen" style="display: block;">

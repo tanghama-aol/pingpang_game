@@ -42,8 +42,8 @@ class PingPongGame {
         
         // 台球桌配置（扩大canvas以容纳小人）
         this.tableSizes = {
-            standard: { width: 1840, height: 800, tableWidth: 1600, tableHeight: 800 },
-            large: { width: 2240, height: 1000, tableWidth: 2000, tableHeight: 1000 }
+            standard: { width: 1380, height: 600, tableWidth: 1200, tableHeight: 600 },
+            large: { width: 1680, height: 750, tableWidth: 1500, tableHeight: 750 }
         };
         this.currentTableSize = 'standard';
         
@@ -174,7 +174,7 @@ class PingPongGame {
         };
         
         this.rightCharacter = {
-            x: 870, // 在canvas内，距离桌子边缘60px
+            x: 652, // 在canvas内，距离桌子边缘60px (1380 * 0.75 - 165)
             y: this.canvas.height / 2,
             width: 80,  // 增大size
             height: 100, // 增大size
