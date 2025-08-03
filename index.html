@@ -40,8 +40,9 @@
         .ui.absolute {
             position: fixed;
             top: 10vh;
-            left: 0;
-            width: 33.33vw;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50vw;
             height: calc(90vh);
             display: flex;
             flex-direction: column;
@@ -55,7 +56,7 @@
             box-sizing: border-box;
         }
         .scoreboard {
-            display: flex;
+            display: none; /* 在开始界面隐藏计分板 */
             justify-content: space-between;
             align-items: center;
             width: 1200px;
@@ -138,6 +139,24 @@
             animation: blink 1.5s infinite, pulse 2s ease-in-out infinite;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             margin-top: 40px;
+        }
+        .scores-button {
+            font-size: 32px;
+            font-weight: bold;
+            color: #FFD700;
+            background: rgba(20, 20, 20, 0.9);
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #FFD700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .scores-button:hover {
+            background: rgba(40, 40, 40, 0.9);
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
         }
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
@@ -237,15 +256,15 @@
         }
         
         .vs-input {
-            padding: 15px 20px;
-            font-size: 48px;
+            padding: 8px 10px;
+            font-size: 24px;
             border: 3px solid #4ECDC4;
             border-radius: 10px;
             background: #1a1a1a;
             color: #fff;
             outline: none;
             transition: all 0.3s;
-            min-width: 180px;
+            min-width: 90px;
             text-align: center;
         }
         
@@ -256,12 +275,12 @@
         }
         
         .player-name-display {
-            font-size: 56px;
+            font-size: 28px;
             font-weight: bold;
-            padding: 15px 20px;
+            padding: 8px 10px;
             border-radius: 10px;
             text-align: center;
-            min-width: 180px;
+            min-width: 90px;
             background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -305,6 +324,93 @@
             font-size: 36px;
             font-weight: bold;
             color: #fff;
+        }
+        .leaderboard {
+            position: fixed;
+            top: 10vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60vw;
+            height: calc(90vh);
+            display: none;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(5px);
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .leaderboard h2 {
+            font-size: 48px;
+            color: #FFD700;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .score-list {
+            width: 100%;
+            max-width: 800px;
+        }
+        .score-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            background: rgba(20, 20, 20, 0.8);
+            border-radius: 10px;
+            border: 1px solid #444;
+        }
+        .score-item.first {
+            border: 2px solid #FFD700;
+            background: rgba(40, 35, 0, 0.8);
+        }
+        .score-item.second {
+            border: 2px solid #C0C0C0;
+            background: rgba(30, 30, 30, 0.8);
+        }
+        .score-item.third {
+            border: 2px solid #CD7F32;
+            background: rgba(35, 25, 10, 0.8);
+        }
+        .score-rank {
+            font-size: 32px;
+            font-weight: bold;
+            color: #FFD700;
+            min-width: 60px;
+        }
+        .score-names {
+            flex: 1;
+            font-size: 24px;
+            color: #fff;
+            text-align: center;
+        }
+        .score-points {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4ECDC4;
+            min-width: 80px;
+            text-align: right;
+        }
+        .back-button {
+            font-size: 28px;
+            font-weight: bold;
+            color: #FF6B6B;
+            background: rgba(20, 20, 20, 0.9);
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #FF6B6B;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 30px;
+        }
+        .back-button:hover {
+            background: rgba(40, 40, 40, 0.9);
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
         }
     </style>
 </head>
@@ -375,6 +481,15 @@
             规则：先到21分者获胜
         </div>
         <div class="start-hint">按 SPACE 开始游戏</div>
+        <div class="scores-button" onclick="game.showLeaderboard()">查看分数排行榜</div>
+    </div>
+
+    <div class="leaderboard" id="leaderboard">
+        <h2>🏆 分数排行榜</h2>
+        <div class="score-list" id="scoreList">
+            <!-- 分数列表将在这里动态生成 -->
+        </div>
+        <div class="back-button" onclick="game.hideLeaderboard()">返回开始界面</div>
     </div>
 
     <div class="game-over" id="gameOverScreen" style="display: none;">

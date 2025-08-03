@@ -5,6 +5,8 @@ class PingPongGame {
         this.startScreen = document.getElementById('startScreen');
         this.gameUI = document.getElementById('gameUI');
         this.gameOverScreen = document.getElementById('gameOverScreen');
+        this.leaderboard = document.getElementById('leaderboard');
+        this.scoreList = document.getElementById('scoreList');
         this.leftScoreDisplay = document.getElementById('leftScore');
         this.rightScoreDisplay = document.getElementById('rightScore');
         this.leftBonusScoreDisplay = document.getElementById('leftBonusScore');
@@ -18,6 +20,10 @@ class PingPongGame {
         this.rightPlayerInput = document.getElementById('rightPlayerName');
         this.leftPlayerDisplayDiv = document.getElementById('leftPlayerDisplay');
         this.rightPlayerDisplayDiv = document.getElementById('rightPlayerDisplay');
+        
+        // IndexedDB相关
+        this.db = null;
+        this.initDatabase();
         
         // 记录是否已经设置名字
         this.leftNameSet = false;
@@ -183,6 +189,117 @@ class PingPongGame {
         this.initEventListeners();
         this.initializeTableSize();
         this.updateStartHint(); // 初始化开始提示
+    }
+    
+    async initDatabase() {
+        try {
+            const request = window.indexedDB.open('PingPongScores', 1);
+            
+            request.onerror = () => {
+                console.error('数据库打开失败');
+            };
+            
+            request.onsuccess = (event) => {
+                this.db = event.target.result;
+                console.log('数据库打开成功');
+            };
+            
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('scores')) {
+                    const objectStore = db.createObjectStore('scores', { keyPath: 'id', autoIncrement: true });
+                    objectStore.createIndex('totalScore', 'totalScore', { unique: false });
+                    objectStore.createIndex('date', 'date', { unique: false });
+                }
+            };
+        } catch (error) {
+            console.error('IndexedDB初始化失败:', error);
+        }
+    }
+    
+    async saveScore(leftPlayer, rightPlayer, leftScore, leftBonus, rightScore, rightBonus, duration) {
+        if (!this.db) return;
+        
+        const transaction = this.db.transaction(['scores'], 'readwrite');
+        const objectStore = transaction.objectStore('scores');
+        
+        const scoreRecord = {
+            leftPlayer,
+            rightPlayer,
+            leftScore,
+            leftBonus,
+            rightScore,
+            rightBonus,
+            leftTotal: leftScore + leftBonus,
+            rightTotal: rightScore + rightBonus,
+            totalScore: leftScore + leftBonus + rightScore + rightBonus,
+            winner: (leftScore + leftBonus) > (rightScore + rightBonus) ? leftPlayer : rightPlayer,
+            date: new Date(),
+            duration
+        };
+        
+        objectStore.add(scoreRecord);
+    }
+    
+    async getScores() {
+        if (!this.db) return [];
+        
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['scores'], 'readonly');
+            const objectStore = transaction.objectStore('scores');
+            const request = objectStore.getAll();
+            
+            request.onsuccess = () => {
+                const scores = request.result;
+                // 按总分排序
+                scores.sort((a, b) => b.totalScore - a.totalScore);
+                resolve(scores.slice(0, 10)); // 只返回前10名
+            };
+            
+            request.onerror = () => {
+                reject(request.error);
+            };
+        });
+    }
+    
+    showLeaderboard() {
+        this.startScreen.style.display = 'none';
+        this.leaderboard.style.display = 'flex';
+        this.loadScores();
+    }
+    
+    hideLeaderboard() {
+        this.leaderboard.style.display = 'none';
+        this.startScreen.style.display = 'block';
+    }
+    
+    async loadScores() {
+        try {
+            const scores = await this.getScores();
+            this.renderScores(scores);
+        } catch (error) {
+            console.error('加载分数失败:', error);
+        }
+    }
+    
+    renderScores(scores) {
+        if (scores.length === 0) {
+            this.scoreList.innerHTML = '<div style="color: #ccc; font-size: 24px; text-align: center; padding: 40px;">暂无分数记录</div>';
+            return;
+        }
+        
+        this.scoreList.innerHTML = scores.map((score, index) => {
+            const rankClass = index === 0 ? 'first' : index === 1 ? 'second' : index === 2 ? 'third' : '';
+            const rankEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
+            
+            return `
+                <div class="score-item ${rankClass}">
+                    <div class="score-rank">${rankEmoji}</div>
+                    <div class="score-names">${score.leftPlayer} vs ${score.rightPlayer}</div>
+                    <div class="score-points">${score.totalScore}</div>
+                </div>
+            `;
+        }).join('');
     }
     
     initializeTableSize() {
@@ -493,6 +610,13 @@ class PingPongGame {
                     this.toggleDetailedStats();
                 }
             }
+            
+            // 全局ESC键处理
+            if (e.key === 'Escape') {
+                if (this.leaderboard.style.display === 'flex') {
+                    this.hideLeaderboard();
+                }
+            }
         });
         
         document.addEventListener('keyup', (e) => {
@@ -530,8 +654,9 @@ class PingPongGame {
         this.leftPlayerDisplay.textContent = this.leftPlayerName;
         this.rightPlayerDisplay.textContent = this.rightPlayerName;
         
-        // 确保游戏界面完全显示
+        // 确保游戏界面完全显示，包括计分板
         this.gameUI.style.display = 'block';
+        document.querySelector('.scoreboard').style.display = 'flex'; // 显示计分板
         this.canvas.style.display = 'block';
         this.gameOverScreen.style.display = 'none';
         
@@ -616,6 +741,7 @@ class PingPongGame {
         this.detailedStats.style.display = 'none';
         this.gameUI.style.display = 'none';
         this.canvas.style.display = 'none';
+        document.querySelector('.scoreboard').style.display = 'none'; // 隐藏计分板
         
         // 重置游戏状态
         this.gameState = 'start';
@@ -908,6 +1034,17 @@ class PingPongGame {
         
         const leftTotal = this.leftScore + this.leftBonusScore;
         const rightTotal = this.rightScore + this.rightBonusScore;
+        
+        // 保存分数到IndexedDB
+        this.saveScore(
+            this.leftPlayerName, 
+            this.rightPlayerName, 
+            this.leftScore, 
+            this.leftBonusScore, 
+            this.rightScore, 
+            this.rightBonusScore, 
+            this.currentGameTime
+        );
         
         if (leftTotal >= this.winningScore) {
             this.winnerText.textContent = `${this.leftPlayerName}获胜！`;
