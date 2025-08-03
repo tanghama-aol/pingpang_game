@@ -283,7 +283,7 @@ class PingPongGame {
         this.gameUI.style.display = 'none';
         
         // 停止背景音乐
-        this.backgroundMusic.pause();
+        //this.backgroundMusic.pause();
         this.backgroundMusic.currentTime = 0;
     }
     
