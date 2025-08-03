@@ -29,10 +29,41 @@
             text-align: center;
             z-index: 10;
         }
-        .score {
-            font-size: 32px;
+        .scoreboard {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 600px;
+            padding: 10px 20px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 10px;
+            border: 1px solid #333;
+        }
+        .player-info {
+            text-align: center;
+            min-width: 120px;
+        }
+        .player-name {
+            font-size: 18px;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+        .player-score {
+            font-size: 36px;
             font-weight: bold;
-            margin-bottom: 10px;
+            color: #fff;
+        }
+        .game-time {
+            text-align: center;
+            color: #ffff00;
+        }
+        .time-label {
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+        .time-display {
+            font-size: 20px;
+            font-weight: bold;
         }
         .game-title {
             font-size: 48px;
@@ -82,7 +113,20 @@
     <canvas id="gameCanvas" width="800" height="400"></canvas>
     
     <div class="ui" id="gameUI">
-        <div class="score" id="scoreDisplay">0 - 0</div>
+        <div class="scoreboard">
+            <div class="player-info">
+                <div class="player-name">小朋友</div>
+                <div class="player-score" id="leftScore">0</div>
+            </div>
+            <div class="game-time">
+                <div class="time-label">游戏时间</div>
+                <div class="time-display" id="gameTime">00:00</div>
+            </div>
+            <div class="player-info">
+                <div class="player-name">唐林</div>
+                <div class="player-score" id="rightScore">0</div>
+            </div>
+        </div>
     </div>
 
     <div class="ui" id="startScreen" style="display: block;">

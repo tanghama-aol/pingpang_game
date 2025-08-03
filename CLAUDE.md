@@ -51,5 +51,4 @@ Since no test framework is currently set up, manual testing should focus on:
 ### 其他规则
 1. 总是使用中文
 2. 每次新需求开发前,提交一个commit,开发结束后提交一个commit
-3. 每实现一条需求, 需要等待1分钟
-4. 每次需求读取todo.list.md中的需求列表按条实现,完成后写入done.list.md,更新changelog.md
+3. 每次需求读取todo.list.md中的需求列表按条实现,完成后写入done.list.md,更新changelog.md

@@ -5,7 +5,9 @@ class PingPongGame {
         this.startScreen = document.getElementById('startScreen');
         this.gameUI = document.getElementById('gameUI');
         this.gameOverScreen = document.getElementById('gameOverScreen');
-        this.scoreDisplay = document.getElementById('scoreDisplay');
+        this.leftScoreDisplay = document.getElementById('leftScore');
+        this.rightScoreDisplay = document.getElementById('rightScore');
+        this.gameTimeDisplay = document.getElementById('gameTime');
         this.winnerText = document.getElementById('winnerText');
         this.finalScore = document.getElementById('finalScore');
 
@@ -47,6 +49,14 @@ class PingPongGame {
             trail: [] // 拖尾效果
         };
         
+        // 出界动画
+        this.outOfBoundsAnimation = {
+            active: false,
+            particles: [],
+            duration: 60, // 帧数
+            currentFrame: 0
+        };
+        
         // 分数
         this.leftScore = 0;
         this.rightScore = 0;
@@ -54,6 +64,10 @@ class PingPongGame {
         
         // 按键状态
         this.keys = {};
+        
+        // 游戏时间
+        this.gameStartTime = 0;
+        this.currentGameTime = 0;
         
         this.initEventListeners();
     }
@@ -82,6 +96,8 @@ class PingPongGame {
         this.gameState = 'playing';
         this.startScreen.style.display = 'none';
         this.gameUI.style.display = 'block';
+        this.gameStartTime = Date.now();
+        this.updateScore();
         this.gameLoop();
     }
     
@@ -99,6 +115,7 @@ class PingPongGame {
         
         this.gameOverScreen.style.display = 'none';
         this.gameState = 'playing';
+        this.gameStartTime = Date.now();
         this.updateScore();
         this.gameLoop();
     }
@@ -174,9 +191,11 @@ class PingPongGame {
         
         // 得分检测
         if (this.ball.x < 0) {
+            this.triggerOutOfBoundsAnimation('left');
             this.rightScore++;
             this.resetBall();
         } else if (this.ball.x > this.canvas.width) {
+            this.triggerOutOfBoundsAnimation('right');
             this.leftScore++;
             this.resetBall();
         }
@@ -196,6 +215,51 @@ class PingPongGame {
         }
     }
     
+    triggerOutOfBoundsAnimation(side) {
+        this.outOfBoundsAnimation.active = true;
+        this.outOfBoundsAnimation.currentFrame = 0;
+        this.outOfBoundsAnimation.particles = [];
+        
+        // 创建粒子效果
+        let x = side === 'left' ? 0 : this.canvas.width;
+        let y = this.ball.y;
+        
+        for (let i = 0; i < 20; i++) {
+            this.outOfBoundsAnimation.particles.push({
+                x: x,
+                y: y,
+                vx: (Math.random() - 0.5) * 8,
+                vy: (Math.random() - 0.5) * 8,
+                life: 1.0,
+                decay: 0.02 + Math.random() * 0.02,
+                size: 3 + Math.random() * 4
+            });
+        }
+    }
+    
+    updateOutOfBoundsAnimation() {
+        if (!this.outOfBoundsAnimation.active) return;
+        
+        this.outOfBoundsAnimation.currentFrame++;
+        
+        // 更新粒子
+        for (let particle of this.outOfBoundsAnimation.particles) {
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+            particle.vx *= 0.98; // 阻力
+            particle.vy *= 0.98;
+            particle.life -= particle.decay;
+        }
+        
+        // 移除生命值耗尽的粒子
+        this.outOfBoundsAnimation.particles = this.outOfBoundsAnimation.particles.filter(p => p.life > 0);
+        
+        // 检查动画是否结束
+        if (this.outOfBoundsAnimation.currentFrame >= this.outOfBoundsAnimation.duration) {
+            this.outOfBoundsAnimation.active = false;
+        }
+    }
+    
     resetBall() {
         this.ball.x = this.canvas.width / 2;
         this.ball.y = this.canvas.height / 2;
@@ -206,7 +270,17 @@ class PingPongGame {
     }
     
     updateScore() {
-        this.scoreDisplay.textContent = `${this.leftScore} - ${this.rightScore}`;
+        this.leftScoreDisplay.textContent = this.leftScore;
+        this.rightScoreDisplay.textContent = this.rightScore;
+        
+        // 更新游戏时间
+        if (this.gameState === 'playing') {
+            this.currentGameTime = Date.now() - this.gameStartTime;
+            let minutes = Math.floor(this.currentGameTime / 60000);
+            let seconds = Math.floor((this.currentGameTime % 60000) / 1000);
+            this.gameTimeDisplay.textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
     }
     
     endGame() {
@@ -215,9 +289,9 @@ class PingPongGame {
         this.gameOverScreen.style.display = 'block';
         
         if (this.leftScore >= this.winningScore) {
-            this.winnerText.textContent = '左侧玩家获胜！';
+            this.winnerText.textContent = '小朋友获胜！';
         } else {
-            this.winnerText.textContent = '右侧玩家获胜！';
+            this.winnerText.textContent = '唐林获胜！';
         }
         
         this.finalScore.textContent = `最终比分：${this.leftScore} - ${this.rightScore}`;
@@ -275,12 +349,43 @@ class PingPongGame {
             this.ball.size
         );
         this.ctx.shadowBlur = 0;
+        
+        // 绘制出界动画
+        this.drawOutOfBoundsAnimation();
+    }
+    
+    drawOutOfBoundsAnimation() {
+        if (!this.outOfBoundsAnimation.active) return;
+        
+        // 绘制粒子
+        for (let particle of this.outOfBoundsAnimation.particles) {
+            this.ctx.save();
+            this.ctx.globalAlpha = particle.life;
+            this.ctx.fillStyle = '#ff6666'; // 红色粒子表示出界
+            this.ctx.beginPath();
+            this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.restore();
+        }
+        
+        // 绘制出界文字效果
+        if (this.outOfBoundsAnimation.currentFrame < 30) {
+            this.ctx.save();
+            this.ctx.globalAlpha = 1 - (this.outOfBoundsAnimation.currentFrame / 30);
+            this.ctx.fillStyle = '#ff4444';
+            this.ctx.font = 'bold 24px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('出界!', this.canvas.width / 2, this.canvas.height / 2 + 50);
+            this.ctx.restore();
+        }
     }
     
     gameLoop() {
         if (this.gameState === 'playing') {
             this.updatePaddles();
             this.updateBall();
+            this.updateOutOfBoundsAnimation();
+            this.updateScore(); // 实时更新计分板和时间
             this.draw();
             requestAnimationFrame(() => this.gameLoop());
         }
