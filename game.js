@@ -121,6 +121,9 @@ class PingPongGame {
         // 按键状态
         this.keys = {};
         
+        // 记录最后一次击球的玩家
+        this.lastHitPlayer = null; // 'left' 或 'right'
+        
         // 游戏时间
         this.gameStartTime = 0;
         this.currentGameTime = 0;
@@ -276,19 +279,28 @@ class PingPongGame {
             );
             
             if (distance < (this.ball.size / 2 + this.apple.size / 2)) {
-                // 被击中，判断球的方向来决定给哪一方奖励
-                if (this.ball.dx > 0) {
-                    // 球向右移动，右侧玩家获得奖励
+                // 苹果被击中，奖励最后一次击球的玩家
+                if (this.lastHitPlayer === 'left') {
+                    this.leftBonusScore++;
+                    this.triggerScoreAnimation(this.leftPlayerName + " 苹果奖励!", 'left');
+                    // 增强左侧小人
+                    this.enhanceCharacter('left');
+                } else if (this.lastHitPlayer === 'right') {
                     this.rightBonusScore++;
                     this.triggerScoreAnimation(this.rightPlayerName + " 苹果奖励!", 'right');
                     // 增强右侧小人
                     this.enhanceCharacter('right');
                 } else {
-                    // 球向左移动，左侧玩家获得奖励
-                    this.leftBonusScore++;
-                    this.triggerScoreAnimation(this.leftPlayerName + " 苹果奖励!", 'left');
-                    // 增强左侧小人
-                    this.enhanceCharacter('left');
+                    // 如果没有记录击球玩家（游戏开始时），根据球的方向判断
+                    if (this.ball.dx > 0) {
+                        this.rightBonusScore++;
+                        this.triggerScoreAnimation(this.rightPlayerName + " 苹果奖励!", 'right');
+                        this.enhanceCharacter('right');
+                    } else {
+                        this.leftBonusScore++;
+                        this.triggerScoreAnimation(this.leftPlayerName + " 苹果奖励!", 'left');
+                        this.enhanceCharacter('left');
+                    }
                 }
                 
                 this.apple.active = false;
@@ -466,7 +478,8 @@ class PingPongGame {
             this.keys[e.key.toLowerCase()] = true;
             
             if (this.gameState === 'start') {
-                if (e.key === ' ' && this.leftNameSet && this.rightNameSet) {
+                if (e.key === ' ') {
+                    // 空格键可以直接开始游戏，不需要检查名字设置状态
                     this.startGame();
                 } else if (e.key === 'Enter') {
                     this.handleEnterKey();
@@ -501,6 +514,9 @@ class PingPongGame {
     }
     
     startGame() {
+        // 先完全隐藏开始界面
+        this.startScreen.style.display = 'none';
+        
         // 获取玩家名字和游戏设置
         this.leftPlayerName = this.leftPlayerInput.value.trim() || '小朋友';
         this.rightPlayerName = this.rightPlayerInput.value.trim() || '唐林';
@@ -514,11 +530,12 @@ class PingPongGame {
         this.leftPlayerDisplay.textContent = this.leftPlayerName;
         this.rightPlayerDisplay.textContent = this.rightPlayerName;
         
-        this.gameState = 'playing';
-        // 隐藏开始界面，显示游戏界面
-        this.startScreen.style.display = 'none';
+        // 确保游戏界面完全显示
         this.gameUI.style.display = 'block';
         this.canvas.style.display = 'block';
+        this.gameOverScreen.style.display = 'none';
+        
+        this.gameState = 'playing';
         this.gameStartTime = Date.now();
         
         // 播放背景音乐
@@ -588,23 +605,24 @@ class PingPongGame {
     
     updateStartHint() {
         const startHint = document.querySelector('.start-hint');
-        if (this.leftNameSet && this.rightNameSet) {
-            startHint.textContent = '按 SPACE 开始游戏';
-            startHint.style.color = '#00FF00';
-        } else {
-            startHint.textContent = '请设置玩家名字（按回车确认）';
-            startHint.style.background = 'linear-gradient(45deg, #FFD700, #FFA500)';
-        }
+        // 始终显示可以开始游戏的提示
+        startHint.textContent = '按 SPACE 开始游戏';
+        startHint.style.color = '#00FF00';
     }
     
     exitGame() {
-        this.gameState = 'start';
+        // 完全隐藏游戏相关界面
         this.gameOverScreen.style.display = 'none';
         this.detailedStats.style.display = 'none';
-        this.showDetailedStats = false;
-        this.startScreen.style.display = 'block';
         this.gameUI.style.display = 'none';
-        this.canvas.style.display = 'none';  // 隐藏canvas
+        this.canvas.style.display = 'none';
+        
+        // 重置游戏状态
+        this.gameState = 'start';
+        this.showDetailedStats = false;
+        
+        // 显示开始界面
+        this.startScreen.style.display = 'block';
         
         // 重置名字设置状态
         this.resetNameInputs();
@@ -687,9 +705,18 @@ class PingPongGame {
     }
     
     updateBall() {
+        // 计算球的当前速度
+        const currentSpeed = Math.sqrt(this.ball.dx * this.ball.dx + this.ball.dy * this.ball.dy);
+        
+        // 根据速度计算拖尾长度，速度越快拖尾越长
+        const baseTrailLength = 5; // 基础拖尾长度
+        const maxTrailLength = 25; // 最大拖尾长度
+        const speedFactor = (currentSpeed - this.ball.baseSpeed) / (8 - this.ball.baseSpeed); // 归一化速度因子
+        const dynamicTrailLength = Math.min(maxTrailLength, baseTrailLength + speedFactor * (maxTrailLength - baseTrailLength));
+        
         // 更新球的拖尾
         this.ball.trail.push({ x: this.ball.x, y: this.ball.y });
-        if (this.ball.trail.length > 15) {
+        if (this.ball.trail.length > Math.max(1, Math.round(dynamicTrailLength))) {
             this.ball.trail.shift();
         }
         
@@ -717,6 +744,7 @@ class PingPongGame {
             
             this.ball.dx = -this.ball.dx;
             this.increaseBallSpeed();
+            this.lastHitPlayer = 'left'; // 记录左侧玩家击球
             
             // 播放击球音效
             this.hitSound.currentTime = 0; // 重置播放位置以便快速连续播放
@@ -735,6 +763,7 @@ class PingPongGame {
             
             this.ball.dx = -this.ball.dx;
             this.increaseBallSpeed();
+            this.lastHitPlayer = 'right'; // 记录右侧玩家击球
             
             // 播放击球音效
             this.hitSound.currentTime = 0; // 重置播放位置以便快速连续播放
@@ -842,6 +871,7 @@ class PingPongGame {
         this.ball.dy = this.ball.baseSpeed * (Math.random() > 0.5 ? 1 : -1);
         this.ball.trail = [];
         this.ball.color = this.getRandomBrightColor(); // 每次重置都更换颜色
+        this.lastHitPlayer = null; // 重置最后击球玩家
         this.updateScore();
     }
     
@@ -900,6 +930,11 @@ class PingPongGame {
         // 绘制桌子背景
         this.ctx.fillStyle = background.base;
         this.ctx.fillRect(tableOffsetX, tableOffsetY, tableWidth, tableHeight);
+        
+        // 绘制桌子边框
+        this.ctx.strokeStyle = '#fff';
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeRect(tableOffsetX, tableOffsetY, tableWidth, tableHeight);
         
         // 绘制图案（仅在桌子区域）
         this.ctx.save();
