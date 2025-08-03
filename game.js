@@ -16,6 +16,12 @@ class PingPongGame {
         this.rightPlayerDisplay = document.getElementById('rightPlayerDisplay');
         this.leftPlayerInput = document.getElementById('leftPlayerName');
         this.rightPlayerInput = document.getElementById('rightPlayerName');
+        this.leftPlayerDisplayDiv = document.getElementById('leftPlayerDisplay');
+        this.rightPlayerDisplayDiv = document.getElementById('rightPlayerDisplay');
+        
+        // 记录是否已经设置名字
+        this.leftNameSet = false;
+        this.rightNameSet = false;
         this.tableSizeSelect = document.getElementById('tableSize');
         this.backgroundSelect = document.getElementById('background');
         this.detailedStats = document.getElementById('detailedStats');
@@ -28,10 +34,10 @@ class PingPongGame {
         this.gameState = 'start'; // 'start', 'playing', 'gameOver'
         this.showDetailedStats = false; // 是否显示详细统计
         
-        // 台球桌配置
+        // 台球桌配置（扩大canvas以容纳小人）
         this.tableSizes = {
-            standard: { width: 800, height: 400 },
-            large: { width: 1000, height: 500 }
+            standard: { width: 920, height: 400, tableWidth: 800, tableHeight: 400 },
+            large: { width: 1120, height: 500, tableWidth: 1000, tableHeight: 500 }
         };
         this.currentTableSize = 'standard';
         
@@ -132,9 +138,9 @@ class PingPongGame {
         this.gameEndSound = new Audio('sound/vector.mp3');
         this.gameEndSound.volume = 0.8;
         
-        // 像素小人（俯视角，位于桌子外面）
+        // 像素小人（俯视角，位于桌子外面但在canvas内）
         this.leftCharacter = {
-            x: -60, // 更远离桌子边缘（40-80px）
+            x: 10, // 在canvas内，距离桌子边缘60px
             y: this.canvas.height / 2,
             width: 40,  // 增大size
             height: 50, // 增大size
@@ -147,7 +153,7 @@ class PingPongGame {
         };
         
         this.rightCharacter = {
-            x: this.canvas.width + 20, // 更远离桌子边缘（40-80px）
+            x: 870, // 在canvas内，距离桌子边缘60px
             y: this.canvas.height / 2,
             width: 40,  // 增大size
             height: 50, // 增大size
@@ -173,6 +179,7 @@ class PingPongGame {
         
         this.initEventListeners();
         this.initializeTableSize();
+        this.updateStartHint(); // 初始化开始提示
     }
     
     initializeTableSize() {
@@ -180,27 +187,44 @@ class PingPongGame {
         this.canvas.width = tableSize.width;
         this.canvas.height = tableSize.height;
         
+        console.log(`Canvas大小: ${this.canvas.width}x${this.canvas.height}`);
+        console.log(`桌子大小: ${tableSize.tableWidth}x${tableSize.tableHeight}`);
+        
         // 重新计算游戏元素位置
         this.updateGameElementsPosition();
     }
     
     updateGameElementsPosition() {
         const tableSize = this.tableSizes[this.currentTableSize];
+        const tableWidth = tableSize.tableWidth || tableSize.width;
+        const tableHeight = tableSize.tableHeight || tableSize.height;
         
-        // 更新球拍位置
-        this.leftPaddle.y = tableSize.height / 2 - this.paddleHeight / 2;
-        this.rightPaddle.x = tableSize.width - 30;
-        this.rightPaddle.y = tableSize.height / 2 - this.paddleHeight / 2;
+        // 桌子在canvas中居中
+        const tableOffsetX = (this.canvas.width - tableWidth) / 2;
+        const tableOffsetY = (this.canvas.height - tableHeight) / 2;
         
-        // 更新球的位置
-        this.ball.x = tableSize.width / 2;
-        this.ball.y = tableSize.height / 2;
+        // 更新球拍位置（相对于桌子）
+        this.leftPaddle.x = tableOffsetX + 20;
+        this.leftPaddle.y = tableOffsetY + tableHeight / 2 - this.paddleHeight / 2;
+        this.rightPaddle.x = tableOffsetX + tableWidth - 30;
+        this.rightPaddle.y = tableOffsetY + tableHeight / 2 - this.paddleHeight / 2;
         
-        // 更新小人位置（距离桌子边缘40-80px）
-        this.leftCharacter.x = -60;
-        this.rightCharacter.x = tableSize.width + 20;
-        this.leftCharacter.y = tableSize.height / 2;
-        this.rightCharacter.y = tableSize.height / 2;
+        // 更新球的位置（桌子中心）
+        this.ball.x = tableOffsetX + tableWidth / 2;
+        this.ball.y = tableOffsetY + tableHeight / 2;
+        
+        // 更新小人位置（在canvas内，距离桌子边缘60px）
+        this.leftCharacter.x = tableOffsetX - 60;
+        this.rightCharacter.x = tableOffsetX + tableWidth + 20;
+        this.leftCharacter.y = tableOffsetY + tableHeight / 2;
+        this.rightCharacter.y = tableOffsetY + tableHeight / 2;
+        
+        console.log(`桌子偏移: x=${tableOffsetX}, y=${tableOffsetY}`);
+        console.log(`左侧小人位置: x=${this.leftCharacter.x}, y=${this.leftCharacter.y}`);
+        console.log(`右侧小人位置: x=${this.rightCharacter.x}, y=${this.rightCharacter.y}`);
+        console.log(`左侧球拍位置: x=${this.leftPaddle.x}, y=${this.leftPaddle.y}`);
+        console.log(`右侧球拍位置: x=${this.rightPaddle.x}, y=${this.rightPaddle.y}`);
+        console.log(`小人是否在可视区域: 左侧=${this.leftCharacter.x >= 0 && this.leftCharacter.x < this.canvas.width}, 右侧=${this.rightCharacter.x >= 0 && this.rightCharacter.x < this.canvas.width}`);
     }
     
     getRandomBrightColor() {
@@ -223,8 +247,13 @@ class PingPongGame {
         if (!this.apple.active) {
             // 随机位置生成苹果，避免在球拍区域
             const tableSize = this.tableSizes[this.currentTableSize];
-            this.apple.x = tableSize.width * 0.25 + Math.random() * (tableSize.width * 0.5); // 在中间区域生成
-            this.apple.y = tableSize.height * 0.125 + Math.random() * (tableSize.height * 0.75); // 避免边界
+            const tableWidth = tableSize.tableWidth || tableSize.width;
+            const tableHeight = tableSize.tableHeight || tableSize.height;
+            const tableOffsetX = (this.canvas.width - tableWidth) / 2;
+            const tableOffsetY = (this.canvas.height - tableHeight) / 2;
+            
+            this.apple.x = tableOffsetX + tableWidth * 0.25 + Math.random() * (tableWidth * 0.5); // 在中间区域生成
+            this.apple.y = tableOffsetY + tableHeight * 0.125 + Math.random() * (tableHeight * 0.75); // 避免边界
             this.apple.active = true;
             this.apple.blinkTimer = 0;
             this.apple.visible = true;
@@ -436,8 +465,12 @@ class PingPongGame {
         document.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
             
-            if (this.gameState === 'start' && e.key === ' ') {
-                this.startGame();
+            if (this.gameState === 'start') {
+                if (e.key === ' ' && this.leftNameSet && this.rightNameSet) {
+                    this.startGame();
+                } else if (e.key === 'Enter') {
+                    this.handleEnterKey();
+                }
             } else if (this.gameState === 'gameOver') {
                 if (e.key.toLowerCase() === 'r') {
                     this.resetGame();
@@ -451,6 +484,19 @@ class PingPongGame {
         
         document.addEventListener('keyup', (e) => {
             this.keys[e.key.toLowerCase()] = false;
+        });
+        
+        // 添加输入框事件监听
+        this.leftPlayerInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                this.setPlayerName('left');
+            }
+        });
+        
+        this.rightPlayerInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                this.setPlayerName('right');
+            }
         });
     }
     
@@ -506,6 +552,49 @@ class PingPongGame {
         this.gameLoop();
     }
     
+    handleEnterKey() {
+        // 检查哪个输入框获得了焦点
+        if (document.activeElement === this.leftPlayerInput) {
+            this.setPlayerName('left');
+        } else if (document.activeElement === this.rightPlayerInput) {
+            this.setPlayerName('right');
+        }
+    }
+    
+    setPlayerName(side) {
+        if (side === 'left' && !this.leftNameSet) {
+            const name = this.leftPlayerInput.value.trim() || '小鹏友';
+            this.leftPlayerName = name;
+            this.leftPlayerDisplayDiv.textContent = name;
+            this.leftPlayerDisplayDiv.style.display = 'block';
+            this.leftPlayerInput.style.display = 'none';
+            this.leftNameSet = true;
+            console.log(`左侧玩家名字设置为: ${name}`);
+        } else if (side === 'right' && !this.rightNameSet) {
+            const name = this.rightPlayerInput.value.trim() || '唐林';
+            this.rightPlayerName = name;
+            this.rightPlayerDisplayDiv.textContent = name;
+            this.rightPlayerDisplayDiv.style.display = 'block';
+            this.rightPlayerInput.style.display = 'none';
+            this.rightNameSet = true;
+            console.log(`右侧玩家名字设置为: ${name}`);
+        }
+        
+        // 检查是否可以开始游戏
+        this.updateStartHint();
+    }
+    
+    updateStartHint() {
+        const startHint = document.querySelector('.start-hint');
+        if (this.leftNameSet && this.rightNameSet) {
+            startHint.textContent = '按 SPACE 开始游戏';
+            startHint.style.color = '#00FF00';
+        } else {
+            startHint.textContent = '请设置玩家名字（按回车确认）';
+            startHint.style.background = 'linear-gradient(45deg, #FFD700, #FFA500)';
+        }
+    }
+    
     exitGame() {
         this.gameState = 'start';
         this.gameOverScreen.style.display = 'none';
@@ -514,8 +603,21 @@ class PingPongGame {
         this.startScreen.style.display = 'block';
         this.gameUI.style.display = 'none';
         
+        // 重置名字设置状态
+        this.resetNameInputs();
+        
         // 背景音乐继续播放，只重置位置
         this.backgroundMusic.currentTime = 0;
+    }
+    
+    resetNameInputs() {
+        this.leftNameSet = false;
+        this.rightNameSet = false;
+        this.leftPlayerInput.style.display = 'block';
+        this.rightPlayerInput.style.display = 'block';
+        this.leftPlayerDisplayDiv.style.display = 'none';
+        this.rightPlayerDisplayDiv.style.display = 'none';
+        this.updateStartHint();
     }
     
     toggleDetailedStats() {
@@ -574,8 +676,11 @@ class PingPongGame {
         this.updateCharacterEnhancement(this.rightCharacter);
         
         // 小人位置独立于球拍，可以有轻微的上下移动表示准备状态
-        this.leftCharacter.y = this.canvas.height / 2 + Math.sin(Date.now() * 0.001) * 5;
-        this.rightCharacter.y = this.canvas.height / 2 + Math.sin(Date.now() * 0.001 + Math.PI) * 5;
+        const tableSize = this.tableSizes[this.currentTableSize];
+        const tableHeight = tableSize.tableHeight || tableSize.height;
+        const tableOffsetY = (this.canvas.height - tableHeight) / 2;
+        this.leftCharacter.y = tableOffsetY + tableHeight / 2 + Math.sin(Date.now() * 0.001) * 5;
+        this.rightCharacter.y = tableOffsetY + tableHeight / 2 + Math.sin(Date.now() * 0.001 + Math.PI) * 5;
     }
     
     updateBall() {
@@ -589,8 +694,15 @@ class PingPongGame {
         this.ball.x += this.ball.dx;
         this.ball.y += this.ball.dy;
         
-        // 上下边界碰撞
-        if (this.ball.y <= this.ball.size || this.ball.y >= this.canvas.height - this.ball.size) {
+        // 获取桌子区域
+        const tableSize = this.tableSizes[this.currentTableSize];
+        const tableWidth = tableSize.tableWidth || tableSize.width;
+        const tableHeight = tableSize.tableHeight || tableSize.height;
+        const tableOffsetX = (this.canvas.width - tableWidth) / 2;
+        const tableOffsetY = (this.canvas.height - tableHeight) / 2;
+        
+        // 上下边界碰撞（相对于桌子区域）
+        if (this.ball.y <= tableOffsetY + this.ball.size || this.ball.y >= tableOffsetY + tableHeight - this.ball.size) {
             this.ball.dy = -this.ball.dy;
         }
         
@@ -630,8 +742,8 @@ class PingPongGame {
             this.ball.dy = (hitPos - 0.5) * 8;
         }
         
-        // 得分检测
-        if (this.ball.x < 0) {
+        // 得分检测（相对于桌子区域）
+        if (this.ball.x < tableOffsetX) {
             this.triggerOutOfBoundsAnimation('left');
             this.rightScore++;
             this.triggerScoreAnimation(this.rightPlayerName, 'right');
@@ -641,7 +753,7 @@ class PingPongGame {
             this.leftLostSound.currentTime = 0;
             this.leftLostSound.play().catch(e => console.log('音效播放失败:', e));
             this.resetBall();
-        } else if (this.ball.x > this.canvas.width) {
+        } else if (this.ball.x > tableOffsetX + tableWidth) {
             this.triggerOutOfBoundsAnimation('right');
             this.leftScore++;
             this.triggerScoreAnimation(this.leftPlayerName, 'left');
@@ -715,8 +827,14 @@ class PingPongGame {
     }
     
     resetBall() {
-        this.ball.x = this.canvas.width / 2;
-        this.ball.y = this.canvas.height / 2;
+        const tableSize = this.tableSizes[this.currentTableSize];
+        const tableWidth = tableSize.tableWidth || tableSize.width;
+        const tableHeight = tableSize.tableHeight || tableSize.height;
+        const tableOffsetX = (this.canvas.width - tableWidth) / 2;
+        const tableOffsetY = (this.canvas.height - tableHeight) / 2;
+        
+        this.ball.x = tableOffsetX + tableWidth / 2;
+        this.ball.y = tableOffsetY + tableHeight / 2;
         this.ball.dx = this.ball.baseSpeed * (Math.random() > 0.5 ? 1 : -1);
         this.ball.dy = this.ball.baseSpeed * (Math.random() > 0.5 ? 1 : -1);
         this.ball.trail = [];
@@ -766,37 +884,49 @@ class PingPongGame {
     
     drawBackground() {
         const background = this.backgrounds[this.currentBackground];
+        const tableSize = this.tableSizes[this.currentTableSize];
+        const tableWidth = tableSize.tableWidth || tableSize.width;
+        const tableHeight = tableSize.tableHeight || tableSize.height;
+        const tableOffsetX = (this.canvas.width - tableWidth) / 2;
+        const tableOffsetY = (this.canvas.height - tableHeight) / 2;
         
-        // 绘制基础背景色
-        this.ctx.fillStyle = background.base;
+        // 绘制canvas背景色（深色）
+        this.ctx.fillStyle = '#111';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // 绘制图案
+        // 绘制桌子背景
+        this.ctx.fillStyle = background.base;
+        this.ctx.fillRect(tableOffsetX, tableOffsetY, tableWidth, tableHeight);
+        
+        // 绘制图案（仅在桌子区域）
         this.ctx.save();
         this.ctx.globalAlpha = 0.1; // 让图案很淡，不干扰球的可见性
+        this.ctx.beginPath();
+        this.ctx.rect(tableOffsetX, tableOffsetY, tableWidth, tableHeight);
+        this.ctx.clip();
         
         switch (background.pattern) {
             case 'dots':
-                this.drawDotsPattern();
+                this.drawDotsPattern(tableOffsetX, tableOffsetY, tableWidth, tableHeight);
                 break;
             case 'lines':
-                this.drawLinesPattern();
+                this.drawLinesPattern(tableOffsetX, tableOffsetY, tableWidth, tableHeight);
                 break;
             case 'wood':
-                this.drawWoodPattern();
+                this.drawWoodPattern(tableOffsetX, tableOffsetY, tableWidth, tableHeight);
                 break;
             case 'grid':
-                this.drawGridPattern();
+                this.drawGridPattern(tableOffsetX, tableOffsetY, tableWidth, tableHeight);
                 break;
         }
         
         this.ctx.restore();
     }
     
-    drawDotsPattern() {
+    drawDotsPattern(offsetX, offsetY, width, height) {
         this.ctx.fillStyle = '#fff';
-        for (let x = 20; x < this.canvas.width; x += 40) {
-            for (let y = 20; y < this.canvas.height; y += 40) {
+        for (let x = offsetX + 20; x < offsetX + width; x += 40) {
+            for (let y = offsetY + 20; y < offsetY + height; y += 40) {
                 this.ctx.beginPath();
                 this.ctx.arc(x, y, 2, 0, Math.PI * 2);
                 this.ctx.fill();
@@ -804,45 +934,45 @@ class PingPongGame {
         }
     }
     
-    drawLinesPattern() {
+    drawLinesPattern(offsetX, offsetY, width, height) {
         this.ctx.strokeStyle = '#fff';
         this.ctx.lineWidth = 1;
-        for (let y = 0; y < this.canvas.height; y += 20) {
+        for (let y = offsetY; y < offsetY + height; y += 20) {
             this.ctx.beginPath();
-            this.ctx.moveTo(0, y);
-            this.ctx.lineTo(this.canvas.width, y);
+            this.ctx.moveTo(offsetX, y);
+            this.ctx.lineTo(offsetX + width, y);
             this.ctx.stroke();
         }
     }
     
-    drawWoodPattern() {
+    drawWoodPattern(offsetX, offsetY, width, height) {
         this.ctx.strokeStyle = '#654321';
         this.ctx.lineWidth = 2;
-        for (let y = 10; y < this.canvas.height; y += 30) {
+        for (let y = offsetY + 10; y < offsetY + height; y += 30) {
             this.ctx.beginPath();
-            this.ctx.moveTo(0, y + Math.sin(y * 0.02) * 5);
-            this.ctx.lineTo(this.canvas.width, y + Math.sin(y * 0.02) * 5);
+            this.ctx.moveTo(offsetX, y + Math.sin(y * 0.02) * 5);
+            this.ctx.lineTo(offsetX + width, y + Math.sin(y * 0.02) * 5);
             this.ctx.stroke();
         }
     }
     
-    drawGridPattern() {
+    drawGridPattern(offsetX, offsetY, width, height) {
         this.ctx.strokeStyle = '#00ffff';
         this.ctx.lineWidth = 1;
         
         // 垂直线
-        for (let x = 0; x < this.canvas.width; x += 30) {
+        for (let x = offsetX; x < offsetX + width; x += 30) {
             this.ctx.beginPath();
-            this.ctx.moveTo(x, 0);
-            this.ctx.lineTo(x, this.canvas.height);
+            this.ctx.moveTo(x, offsetY);
+            this.ctx.lineTo(x, offsetY + height);
             this.ctx.stroke();
         }
         
         // 水平线
-        for (let y = 0; y < this.canvas.height; y += 30) {
+        for (let y = offsetY; y < offsetY + height; y += 30) {
             this.ctx.beginPath();
-            this.ctx.moveTo(0, y);
-            this.ctx.lineTo(this.canvas.width, y);
+            this.ctx.moveTo(offsetX, y);
+            this.ctx.lineTo(offsetX + width, y);
             this.ctx.stroke();
         }
     }
@@ -851,13 +981,20 @@ class PingPongGame {
         // 绘制背景
         this.drawBackground();
         
-        // 绘制中线
+        // 获取桌子信息
+        const tableSize = this.tableSizes[this.currentTableSize];
+        const tableWidth = tableSize.tableWidth || tableSize.width;
+        const tableHeight = tableSize.tableHeight || tableSize.height;
+        const tableOffsetX = (this.canvas.width - tableWidth) / 2;
+        const tableOffsetY = (this.canvas.height - tableHeight) / 2;
+        
+        // 绘制中线（仅在桌子区域）
         this.ctx.strokeStyle = '#333';
         this.ctx.lineWidth = 2;
         this.ctx.setLineDash([10, 10]);
         this.ctx.beginPath();
-        this.ctx.moveTo(this.canvas.width / 2, 0);
-        this.ctx.lineTo(this.canvas.width / 2, this.canvas.height);
+        this.ctx.moveTo(tableOffsetX + tableWidth / 2, tableOffsetY);
+        this.ctx.lineTo(tableOffsetX + tableWidth / 2, tableOffsetY + tableHeight);
         this.ctx.stroke();
         this.ctx.setLineDash([]);
         
@@ -866,7 +1003,9 @@ class PingPongGame {
         this.ctx.fillRect(this.leftPaddle.x, this.leftPaddle.y, this.leftPaddle.width, this.leftPaddle.height);
         this.ctx.fillRect(this.rightPaddle.x, this.rightPaddle.y, this.rightPaddle.width, this.rightPaddle.height);
         
-        // 绘制像素小人
+        // 绘制像素小人（在桌子外但在canvas内）
+        console.log(`正在绘制左侧小人在: x=${this.leftCharacter.x}, y=${this.leftCharacter.y}`);
+        console.log(`正在绘制右侧小人在: x=${this.rightCharacter.x}, y=${this.rightCharacter.y}`);
         this.drawPixelCharacter(this.leftCharacter, true);
         this.drawPixelCharacter(this.rightCharacter, false);
         
