@@ -36,8 +36,8 @@ class PingPongGame {
         
         // 台球桌配置（扩大canvas以容纳小人）
         this.tableSizes = {
-            standard: { width: 920, height: 400, tableWidth: 800, tableHeight: 400 },
-            large: { width: 1120, height: 500, tableWidth: 1000, tableHeight: 500 }
+            standard: { width: 1840, height: 800, tableWidth: 1600, tableHeight: 800 },
+            large: { width: 2240, height: 1000, tableWidth: 2000, tableHeight: 1000 }
         };
         this.currentTableSize = 'standard';
         
@@ -56,9 +56,9 @@ class PingPongGame {
         this.rightPlayerName = '唐林';
         
         // 球拍属性
-        this.paddleWidth = 10;
-        this.paddleHeight = 80;
-        this.paddleSpeed = 5;
+        this.paddleWidth = 20;
+        this.paddleHeight = 160;
+        this.paddleSpeed = 10;
         
         // 左侧球拍
         this.leftPaddle = {
@@ -79,14 +79,14 @@ class PingPongGame {
         };
         
         // 球属性
-        this.ballSize = 15; // 增大球的尺寸
+        this.ballSize = 30; // 增大球的尺寸
         this.ball = {
             x: this.canvas.width / 2,
             y: this.canvas.height / 2,
-            dx: 3,
-            dy: 2,
+            dx: 6,
+            dy: 4,
             size: this.ballSize,
-            baseSpeed: 3,
+            baseSpeed: 6,
             trail: [], // 拖尾效果
             color: this.getRandomBrightColor() // 随机鲜艳颜色
         };
@@ -111,7 +111,7 @@ class PingPongGame {
             active: false,
             x: 0,
             y: 0,
-            size: 24, // 增大一倍
+            size: 48, // 增大一倍
             spawnTimer: 0,
             spawnInterval: 600 + Math.random() * 1200, // 10-30秒随机生成
             blinkTimer: 0,
@@ -145,11 +145,11 @@ class PingPongGame {
         this.leftCharacter = {
             x: 10, // 在canvas内，距离桌子边缘60px
             y: this.canvas.height / 2,
-            width: 40,  // 增大size
-            height: 50, // 增大size
+            width: 80,  // 增大size
+            height: 100, // 增大size
             animationFrame: 0,
             animationSpeed: 0.15,
-            size: 1.0, // 大小比例
+            size: 2.0, // 大小比例
             isEnhanced: false, // 是否被增强（击中苹果）
             enhancedTimer: 0, // 增强状态倒计时
             paddleSpeedMultiplier: 1.0 // 球拍速度倍数
@@ -158,11 +158,11 @@ class PingPongGame {
         this.rightCharacter = {
             x: 870, // 在canvas内，距离桌子边缘60px
             y: this.canvas.height / 2,
-            width: 40,  // 增大size
-            height: 50, // 增大size
+            width: 80,  // 增大size
+            height: 100, // 增大size
             animationFrame: 0,
             animationSpeed: 0.15,
-            size: 1.0, // 大小比例  
+            size: 2.0, // 大小比例  
             isEnhanced: false, // 是否被增强（击中苹果）
             enhancedTimer: 0, // 增强状态倒计时
             paddleSpeedMultiplier: 1.0 // 球拍速度倍数
@@ -696,12 +696,16 @@ class PingPongGame {
         this.updateCharacterEnhancement(this.leftCharacter);
         this.updateCharacterEnhancement(this.rightCharacter);
         
-        // 小人位置独立于球拍，可以有轻微的上下移动表示准备状态
+        // 小人跟随球拍移动，保持在球拍的中心高度
         const tableSize = this.tableSizes[this.currentTableSize];
         const tableHeight = tableSize.tableHeight || tableSize.height;
         const tableOffsetY = (this.canvas.height - tableHeight) / 2;
-        this.leftCharacter.y = tableOffsetY + tableHeight / 2 + Math.sin(Date.now() * 0.001) * 5;
-        this.rightCharacter.y = tableOffsetY + tableHeight / 2 + Math.sin(Date.now() * 0.001 + Math.PI) * 5;
+        
+        // 左侧小人跟随左侧球拍
+        this.leftCharacter.y = this.leftPaddle.y + this.leftPaddle.height / 2;
+        
+        // 右侧小人跟随右侧球拍
+        this.rightCharacter.y = this.rightPaddle.y + this.rightPaddle.height / 2;
     }
     
     updateBall() {
