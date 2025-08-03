@@ -105,7 +105,7 @@ class PingPongGame {
             active: false,
             x: 0,
             y: 0,
-            size: 12,
+            size: 24, // 增大一倍
             spawnTimer: 0,
             spawnInterval: 600 + Math.random() * 1200, // 10-30秒随机生成
             blinkTimer: 0,
@@ -120,29 +120,43 @@ class PingPongGame {
         this.currentGameTime = 0;
         
         // 音效
-        this.pingSound = new Audio('sound/ping.wav');
-        this.pingSound.volume = 0.8; // 设置音量较大
-        this.backgroundMusic = new Audio('sound/Combat02.mp3');
+        this.hitSound = new Audio('sound/hit.mp3');
+        this.hitSound.volume = 0.8; // 设置音量较大
+        this.backgroundMusic = new Audio('sound/比赛的一天.mp3');
         this.backgroundMusic.volume = 0.6;
         this.backgroundMusic.loop = true; // 循环播放
+        this.leftLostSound = new Audio('sound/left_lost_mp3.mp3');
+        this.leftLostSound.volume = 0.7;
+        this.rightLostSound = new Audio('sound/right_lost.mp3');
+        this.rightLostSound.volume = 0.7;
+        this.gameEndSound = new Audio('sound/vector.mp3');
+        this.gameEndSound.volume = 0.8;
         
         // 像素小人（俯视角，位于桌子外面）
         this.leftCharacter = {
-            x: -40, // 放到画布外面
+            x: -60, // 更远离桌子边缘（40-80px）
             y: this.canvas.height / 2,
-            width: 30,
-            height: 40,
+            width: 40,  // 增大size
+            height: 50, // 增大size
             animationFrame: 0,
-            animationSpeed: 0.15
+            animationSpeed: 0.15,
+            size: 1.0, // 大小比例
+            isEnhanced: false, // 是否被增强（击中苹果）
+            enhancedTimer: 0, // 增强状态倒计时
+            paddleSpeedMultiplier: 1.0 // 球拍速度倍数
         };
         
         this.rightCharacter = {
-            x: this.canvas.width + 10, // 放到画布外面
+            x: this.canvas.width + 20, // 更远离桌子边缘（40-80px）
             y: this.canvas.height / 2,
-            width: 30,
-            height: 40,
+            width: 40,  // 增大size
+            height: 50, // 增大size
             animationFrame: 0,
-            animationSpeed: 0.15
+            animationSpeed: 0.15,
+            size: 1.0, // 大小比例  
+            isEnhanced: false, // 是否被增强（击中苹果）
+            enhancedTimer: 0, // 增强状态倒计时
+            paddleSpeedMultiplier: 1.0 // 球拍速度倍数
         };
         
         // 得分动画
@@ -182,8 +196,9 @@ class PingPongGame {
         this.ball.x = tableSize.width / 2;
         this.ball.y = tableSize.height / 2;
         
-        // 更新小人位置
-        this.rightCharacter.x = tableSize.width + 10;
+        // 更新小人位置（距离桌子边缘40-80px）
+        this.leftCharacter.x = -60;
+        this.rightCharacter.x = tableSize.width + 20;
         this.leftCharacter.y = tableSize.height / 2;
         this.rightCharacter.y = tableSize.height / 2;
     }
@@ -237,18 +252,22 @@ class PingPongGame {
                     // 球向右移动，右侧玩家获得奖励
                     this.rightBonusScore++;
                     this.triggerScoreAnimation(this.rightPlayerName + " 苹果奖励!", 'right');
+                    // 增强右侧小人
+                    this.enhanceCharacter('right');
                 } else {
                     // 球向左移动，左侧玩家获得奖励
                     this.leftBonusScore++;
                     this.triggerScoreAnimation(this.leftPlayerName + " 苹果奖励!", 'left');
+                    // 增强左侧小人
+                    this.enhanceCharacter('left');
                 }
                 
                 this.apple.active = false;
                 this.apple.spawnTimer = 0;
                 
                 // 播放击球音效表示击中苹果
-                this.pingSound.currentTime = 0;
-                this.pingSound.play().catch(e => console.log('音效播放失败:', e));
+                this.hitSound.currentTime = 0;
+                this.hitSound.play().catch(e => console.log('音效播放失败:', e));
             }
         } else {
             // 苹果未激活时，计时器递增
@@ -265,90 +284,103 @@ class PingPongGame {
         const ctx = this.ctx;
         const x = this.apple.x;
         const y = this.apple.y;
+        const size = this.apple.size / 12; // 缩放比例
         
-        // 绘制像素苹果（8x8像素风格）
+        // 绘制像素苹果（大一倍的版本）
         ctx.fillStyle = '#FF4444'; // 红色苹果
         
         // 苹果主体
-        ctx.fillRect(x - 4, y - 2, 8, 6);
-        ctx.fillRect(x - 2, y - 4, 4, 2);
-        ctx.fillRect(x - 3, y + 4, 6, 2);
+        ctx.fillRect(x - 4*size, y - 2*size, 8*size, 6*size);
+        ctx.fillRect(x - 2*size, y - 4*size, 4*size, 2*size);
+        ctx.fillRect(x - 3*size, y + 4*size, 6*size, 2*size);
         
         // 苹果叶子
         ctx.fillStyle = '#44FF44'; // 绿色叶子
-        ctx.fillRect(x + 1, y - 6, 2, 2);
+        ctx.fillRect(x + 1*size, y - 6*size, 2*size, 2*size);
         
         // 苹果梗
         ctx.fillStyle = '#8B4513'; // 棕色梗
-        ctx.fillRect(x, y - 5, 1, 1);
+        ctx.fillRect(x, y - 5*size, 1*size, 1*size);
     }
 
     drawPixelCharacter(character, isLeft) {
         const ctx = this.ctx;
         const x = character.x;
         const y = character.y;
+        const scale = character.size; // 使用动态大小
         
-        // 俯视角的乒乓球运动员（更大更详细）
-        const bodyColor = isLeft ? '#FF6B6B' : '#4ECDC4'; // 左边红色，右边青色
+        // 俯视角的乒乓球运动员（更大更详细，不同颜色）
+        const bodyColor = isLeft ? '#FF4444' : '#44AAFF'; // 左边亮红色，右边亮蓝色
         const skinColor = '#FFDBAC'; // 肤色
         const paddleColor = '#8B4513'; // 球拍颜色
+        const glowColor = character.isEnhanced ? '#FFD700' : null; // 增强时发光
         
-        // 身体（椭圆形）
+        ctx.save();
+        
+        // 如果被增强，添加发光效果
+        if (character.isEnhanced) {
+            ctx.shadowColor = glowColor;
+            ctx.shadowBlur = 15;
+        }
+        
+        // 身体（椭圆形）- 缩放版本
         ctx.fillStyle = bodyColor;
-        ctx.fillRect(x + 8, y - 5, 14, 20);
-        ctx.fillRect(x + 10, y - 7, 10, 4);
-        ctx.fillRect(x + 10, y + 15, 10, 4);
+        ctx.fillRect(x + 8*scale, y - 5*scale, 14*scale, 20*scale);
+        ctx.fillRect(x + 10*scale, y - 7*scale, 10*scale, 4*scale);
+        ctx.fillRect(x + 10*scale, y + 15*scale, 10*scale, 4*scale);
         
         // 头部（圆形）
         ctx.fillStyle = skinColor;
-        ctx.fillRect(x + 11, y - 15, 8, 8);
-        ctx.fillRect(x + 13, y - 17, 4, 4);
+        ctx.fillRect(x + 11*scale, y - 15*scale, 8*scale, 8*scale);
+        ctx.fillRect(x + 13*scale, y - 17*scale, 4*scale, 4*scale);
         
         // 眼睛
         ctx.fillStyle = '#000';
-        ctx.fillRect(x + 14, y - 13, 1, 1);
-        ctx.fillRect(x + 16, y - 13, 1, 1);
+        ctx.fillRect(x + 14*scale, y - 13*scale, 1*scale, 1*scale);
+        ctx.fillRect(x + 16*scale, y - 13*scale, 1*scale, 1*scale);
         
         // 手臂和球拍（动态摆动）
-        const swingOffset = Math.sin(character.animationFrame) * 3;
+        const swingOffset = Math.sin(character.animationFrame) * 3 * scale;
         ctx.fillStyle = skinColor;
         
         if (isLeft) {
             // 左侧选手右手持拍
-            ctx.fillRect(x + 22, y - 2 + swingOffset, 3, 6);
+            ctx.fillRect(x + 22*scale, y - 2*scale + swingOffset, 3*scale, 6*scale);
             // 球拍
             ctx.fillStyle = paddleColor;
-            ctx.fillRect(x + 25, y - 4 + swingOffset, 5, 2);
-            ctx.fillRect(x + 25, y + 2 + swingOffset, 5, 2);
+            ctx.fillRect(x + 25*scale, y - 4*scale + swingOffset, 5*scale, 2*scale);
+            ctx.fillRect(x + 25*scale, y + 2*scale + swingOffset, 5*scale, 2*scale);
         } else {
             // 右侧选手左手持拍
-            ctx.fillRect(x + 5, y - 2 + swingOffset, 3, 6);
+            ctx.fillRect(x + 5*scale, y - 2*scale + swingOffset, 3*scale, 6*scale);
             // 球拍
             ctx.fillStyle = paddleColor;
-            ctx.fillRect(x, y - 4 + swingOffset, 5, 2);
-            ctx.fillRect(x, y + 2 + swingOffset, 5, 2);
+            ctx.fillRect(x, y - 4*scale + swingOffset, 5*scale, 2*scale);
+            ctx.fillRect(x, y + 2*scale + swingOffset, 5*scale, 2*scale);
         }
         
         // 另一只手臂
         ctx.fillStyle = skinColor;
         if (isLeft) {
-            ctx.fillRect(x + 5, y + 1 - swingOffset/2, 3, 5);
+            ctx.fillRect(x + 5*scale, y + 1*scale - swingOffset/2, 3*scale, 5*scale);
         } else {
-            ctx.fillRect(x + 22, y + 1 - swingOffset/2, 3, 5);
+            ctx.fillRect(x + 22*scale, y + 1*scale - swingOffset/2, 3*scale, 5*scale);
         }
         
         // 腿部（动态）
-        const legOffset = Math.sin(character.animationFrame + Math.PI) * 1;
-        ctx.fillRect(x + 10, y + 19, 3, 8 + legOffset);
-        ctx.fillRect(x + 17, y + 19, 3, 8 - legOffset);
+        const legOffset = Math.sin(character.animationFrame + Math.PI) * 1 * scale;
+        ctx.fillRect(x + 10*scale, y + 19*scale, 3*scale, 8*scale + legOffset);
+        ctx.fillRect(x + 17*scale, y + 19*scale, 3*scale, 8*scale - legOffset);
         
         // 鞋子
         ctx.fillStyle = '#000';
-        ctx.fillRect(x + 9, y + 27 + legOffset, 5, 2);
-        ctx.fillRect(x + 16, y + 27 - legOffset, 5, 2);
+        ctx.fillRect(x + 9*scale, y + 27*scale + legOffset, 5*scale, 2*scale);
+        ctx.fillRect(x + 16*scale, y + 27*scale - legOffset, 5*scale, 2*scale);
         
         // 更新动画帧
         character.animationFrame += character.animationSpeed;
+        
+        ctx.restore();
     }
     
     triggerScoreAnimation(playerName, side) {
@@ -517,21 +549,29 @@ class PingPongGame {
     }
     
     updatePaddles() {
+        // 计算增强后的速度
+        const leftSpeed = this.leftPaddle.speed * this.leftCharacter.paddleSpeedMultiplier;
+        const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier;
+        
         // 左侧球拍控制 (A/Z)
         if (this.keys['a'] && this.leftPaddle.y > 0) {
-            this.leftPaddle.y -= this.leftPaddle.speed;
+            this.leftPaddle.y -= leftSpeed;
         }
         if (this.keys['z'] && this.leftPaddle.y < this.canvas.height - this.leftPaddle.height) {
-            this.leftPaddle.y += this.leftPaddle.speed;
+            this.leftPaddle.y += leftSpeed;
         }
         
         // 右侧球拍控制 (上下箭头)
         if (this.keys['arrowup'] && this.rightPaddle.y > 0) {
-            this.rightPaddle.y -= this.rightPaddle.speed;
+            this.rightPaddle.y -= rightSpeed;
         }
         if (this.keys['arrowdown'] && this.rightPaddle.y < this.canvas.height - this.rightPaddle.height) {
-            this.rightPaddle.y += this.rightPaddle.speed;
+            this.rightPaddle.y += rightSpeed;
         }
+        
+        // 更新小人增强状态
+        this.updateCharacterEnhancement(this.leftCharacter);
+        this.updateCharacterEnhancement(this.rightCharacter);
         
         // 小人位置独立于球拍，可以有轻微的上下移动表示准备状态
         this.leftCharacter.y = this.canvas.height / 2 + Math.sin(Date.now() * 0.001) * 5;
@@ -564,8 +604,8 @@ class PingPongGame {
             this.increaseBallSpeed();
             
             // 播放击球音效
-            this.pingSound.currentTime = 0; // 重置播放位置以便快速连续播放
-            this.pingSound.play().catch(e => console.log('音效播放失败:', e));
+            this.hitSound.currentTime = 0; // 重置播放位置以便快速连续播放
+            this.hitSound.play().catch(e => console.log('音效播放失败:', e));
             
             // 根据击中位置调整角度
             let hitPos = (this.ball.y - this.leftPaddle.y) / this.leftPaddle.height;
@@ -582,8 +622,8 @@ class PingPongGame {
             this.increaseBallSpeed();
             
             // 播放击球音效
-            this.pingSound.currentTime = 0; // 重置播放位置以便快速连续播放
-            this.pingSound.play().catch(e => console.log('音效播放失败:', e));
+            this.hitSound.currentTime = 0; // 重置播放位置以便快速连续播放
+            this.hitSound.play().catch(e => console.log('音效播放失败:', e));
             
             // 根据击中位置调整角度
             let hitPos = (this.ball.y - this.rightPaddle.y) / this.rightPaddle.height;
@@ -595,11 +635,21 @@ class PingPongGame {
             this.triggerOutOfBoundsAnimation('left');
             this.rightScore++;
             this.triggerScoreAnimation(this.rightPlayerName, 'right');
+            // 左侧失分，重置左侧小人增强状态
+            this.resetCharacterEnhancement('left');
+            // 播放左侧失球音效
+            this.leftLostSound.currentTime = 0;
+            this.leftLostSound.play().catch(e => console.log('音效播放失败:', e));
             this.resetBall();
         } else if (this.ball.x > this.canvas.width) {
             this.triggerOutOfBoundsAnimation('right');
             this.leftScore++;
             this.triggerScoreAnimation(this.leftPlayerName, 'left');
+            // 右侧失分，重置右侧小人增强状态
+            this.resetCharacterEnhancement('right');
+            // 播放右侧失球音效
+            this.rightLostSound.currentTime = 0;
+            this.rightLostSound.play().catch(e => console.log('音效播放失败:', e));
             this.resetBall();
         }
         
@@ -694,6 +744,10 @@ class PingPongGame {
         this.gameState = 'gameOver';
         this.gameUI.style.display = 'none';
         this.gameOverScreen.style.display = 'block';
+        
+        // 播放结束一局的音效
+        this.gameEndSound.currentTime = 0;
+        this.gameEndSound.play().catch(e => console.log('音效播放失败:', e));
         
         // 保持背景音乐播放，不停止
         
@@ -849,6 +903,32 @@ class PingPongGame {
         
         // 绘制苹果
         this.drawApple();
+    }
+    
+    enhanceCharacter(side) {
+        const character = side === 'left' ? this.leftCharacter : this.rightCharacter;
+        character.isEnhanced = true;
+        character.size = 2.0; // 变大一倍
+        character.paddleSpeedMultiplier = 1.2; // 击球速度增加20%
+        character.enhancedTimer = 0;
+    }
+    
+    updateCharacterEnhancement(character) {
+        if (character.isEnhanced) {
+            character.enhancedTimer++;
+            // 增强状态持续一段时间（比如600帧，约10秒）
+            if (character.enhancedTimer > 600) {
+                this.resetCharacterEnhancement(character === this.leftCharacter ? 'left' : 'right');
+            }
+        }
+    }
+    
+    resetCharacterEnhancement(side) {
+        const character = side === 'left' ? this.leftCharacter : this.rightCharacter;
+        character.isEnhanced = false;
+        character.size = 1.0; // 恢复正常大小
+        character.paddleSpeedMultiplier = 1.0; // 恢复正常速度
+        character.enhancedTimer = 0;
     }
     
     drawOutOfBoundsAnimation() {
