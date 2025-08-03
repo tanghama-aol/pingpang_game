@@ -65,6 +65,11 @@
             font-weight: bold;
             color: #fff;
         }
+        .bonus-score {
+            font-size: 14px;
+            color: #ffff00;
+            margin-top: 2px;
+        }
         .game-time {
             text-align: center;
             color: #ffff00;
@@ -136,7 +141,7 @@
             min-width: 120px;
             text-align: right;
         }
-        .player-input input {
+        .player-input input, .player-input select {
             padding: 8px 12px;
             font-size: 16px;
             border: 2px solid #333;
@@ -146,8 +151,42 @@
             outline: none;
             transition: border-color 0.3s;
         }
-        .player-input input:focus {
+        .player-input input:focus, .player-input select:focus {
             border-color: #ffff00;
+        }
+        .detailed-stats {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(40,40,40,0.9);
+            border-radius: 8px;
+            border: 1px solid #666;
+        }
+        .detailed-stats h3 {
+            margin: 0 0 15px 0;
+            color: #ffff00;
+            font-size: 20px;
+            text-align: center;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 5px;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #ccc;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
         }
     </style>
 </head>
@@ -158,6 +197,7 @@
                 <div class="player-info">
                     <div class="player-name" id="leftPlayerDisplay">小鹏友</div>
                     <div class="player-score" id="leftScore">0</div>
+                    <div class="bonus-score" id="leftBonusScore">奖励: 0</div>
                 </div>
                 <div class="game-time">
                     <div class="time-label">游戏时间</div>
@@ -166,6 +206,7 @@
                 <div class="player-info">
                     <div class="player-name" id="rightPlayerDisplay">唐林</div>
                     <div class="player-score" id="rightScore">0</div>
+                    <div class="bonus-score" id="rightBonusScore">奖励: 0</div>
                 </div>
             </div>
         </div>
@@ -184,13 +225,30 @@
                 <label for="rightPlayerName">右侧玩家名字：</label>
                 <input type="text" id="rightPlayerName" value="唐林" maxlength="10">
             </div>
+            <div class="player-input">
+                <label for="tableSize">桌子大小：</label>
+                <select id="tableSize">
+                    <option value="standard">标准桌 (800x400)</option>
+                    <option value="large">大桌 (1000x500)</option>
+                </select>
+            </div>
+            <div class="player-input">
+                <label for="background">桌面背景：</label>
+                <select id="background">
+                    <option value="classic">经典绿色</option>
+                    <option value="dark">深色模式</option>
+                    <option value="blue">海蓝色</option>
+                    <option value="wood">木质纹理</option>
+                    <option value="neon">霓虹风格</option>
+                </select>
+            </div>
         </div>
         <div class="instructions">
             游戏玩法：<br>
             左侧玩家：A键（上移）、Z键（下移）<br>
             右侧玩家：↑键（上移）、↓键（下移）<br><br>
             目标：将球打过对方，球未被接住则得分<br>
-            规则：先到10分者获胜
+            规则：先到21分者获胜
         </div>
         <div class="start-hint">按 SPACE 开始游戏</div>
     </div>
@@ -198,7 +256,28 @@
     <div class="game-over" id="gameOverScreen" style="display: none;">
         <div class="winner" id="winnerText"></div>
         <div class="final-score" id="finalScore"></div>
-        <div class="restart-hint">按 R 重新开始 | 按 ESC 退出</div>
+        <div class="detailed-stats" id="detailedStats" style="display: none;">
+            <h3>详细统计</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">总比分</div>
+                    <div class="stat-value" id="totalScores"></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">常规得分</div>
+                    <div class="stat-value" id="regularScores"></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">奖励得分</div>
+                    <div class="stat-value" id="bonusScores"></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">游戏时长</div>
+                    <div class="stat-value" id="gameDuration"></div>
+                </div>
+            </div>
+        </div>
+        <div class="restart-hint">按 R 重新开始 | 按 ESC 退出 | 按 D 查看详细</div>
     </div>
 
     <script src="game.js"></script>
