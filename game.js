@@ -502,7 +502,7 @@ class PingPongGame {
     
     startGame() {
         // 获取玩家名字和游戏设置
-        this.leftPlayerName = this.leftPlayerInput.value.trim() || '小鹏友';
+        this.leftPlayerName = this.leftPlayerInput.value.trim() || '小朋友';
         this.rightPlayerName = this.rightPlayerInput.value.trim() || '唐林';
         this.currentTableSize = this.tableSizeSelect.value;
         this.currentBackground = this.backgroundSelect.value;
@@ -515,8 +515,10 @@ class PingPongGame {
         this.rightPlayerDisplay.textContent = this.rightPlayerName;
         
         this.gameState = 'playing';
+        // 隐藏开始界面，显示游戏界面
         this.startScreen.style.display = 'none';
         this.gameUI.style.display = 'block';
+        this.canvas.style.display = 'block';
         this.gameStartTime = Date.now();
         
         // 播放背景音乐
@@ -602,6 +604,7 @@ class PingPongGame {
         this.showDetailedStats = false;
         this.startScreen.style.display = 'block';
         this.gameUI.style.display = 'none';
+        this.canvas.style.display = 'none';  // 隐藏canvas
         
         // 重置名字设置状态
         this.resetNameInputs();

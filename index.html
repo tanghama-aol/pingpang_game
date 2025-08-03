@@ -23,25 +23,32 @@
             flex-direction: column;
             align-items: center;
             gap: 10px;
+            position: relative;
+            width: 100%;
+            height: 100vh;
         }
         canvas {
-            border: 2px solid #fff;
             background: #111;
+            display: none; /* 默认隐藏，游戏开始时显示 */
         }
         .ui {
             position: relative;
             text-align: center;
         }
         .ui.absolute {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             text-align: center;
-            z-index: 10;
-            min-height: 600px;
-            width: 90%;
-            max-width: 800px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(5px);
         }
         .scoreboard {
             display: flex;
@@ -297,6 +304,7 @@
     </style>
 </head>
 <body>
+    
     <div class="game-container">
         <div class="ui" id="gameUI">
             <div class="scoreboard">
@@ -317,23 +325,21 @@
             </div>
         </div>
         
-        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
     </div>
     
     <div class="ui absolute" id="startScreen" style="display: block;">
         <div class="game-title">唐林的乒乓球</div>
         <div class="player-setup">
-            <div class="vs-container">
-                <div class="vs-player">
-                    <div class="vs-label">左侧玩家</div>
+            <div class="vs-container"  style="display: flex; justify-content: space-between; gap: 30px; margin: 30px 0; flex-wrap: wrap;">
+                <div class="vs-player" style="flex: 1; min-width: 200px;">
                     <input type="text" class="vs-input" id="leftPlayerName" value="小鹏友" maxlength="10">
-                    <div class="player-name-display" id="leftPlayerDisplay"></div>
+                    <div class="player-name-display" id="leftPlayerDisplay">小鹏友</div>
                 </div>
-                <div class="vs-text">VS</div>
-                <div class="vs-player">
-                    <div class="vs-label">右侧玩家</div>
+                <div class="vs-text" style="flex: 1; min-width: 200px;">VS</div>
+                <div class="vs-player" style="flex: 1; min-width: 200px;">
                     <input type="text" class="vs-input" id="rightPlayerName" value="唐林" maxlength="10">
-                    <div class="player-name-display" id="rightPlayerDisplay"></div>
+                    <div class="player-name-display" id="rightPlayerDisplay">唐林</div>
                 </div>
             </div>
             <div style="display: flex; justify-content: space-between; gap: 30px; margin: 30px 0; flex-wrap: wrap;">
