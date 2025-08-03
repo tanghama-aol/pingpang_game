@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>唐林的乒乓球</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            border: 2px solid #fff;
+            background: #111;
+        }
+        .ui {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+        }
+        .score {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .game-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.5);
+        }
+        .instructions {
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        .start-hint {
+            font-size: 24px;
+            animation: blink 1.5s infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            padding: 40px;
+            border-radius: 10px;
+            border: 2px solid #fff;
+        }
+        .winner {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: #ffff00;
+        }
+        .final-score {
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        .restart-hint {
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    
+    <div class="ui" id="gameUI">
+        <div class="score" id="scoreDisplay">0 - 0</div>
+    </div>
+
+    <div class="ui" id="startScreen" style="display: block;">
+        <div class="game-title">唐林的乒乓球</div>
+        <div class="instructions">
+            游戏玩法：<br>
+            左侧玩家：A键（上移）、Z键（下移）<br>
+            右侧玩家：↑键（上移）、↓键（下移）<br><br>
+            目标：将球打过对方，球未被接住则得分<br>
+            规则：先到10分者获胜
+        </div>
+        <div class="start-hint">按任意键开始游戏</div>
+    </div>
+
+    <div class="game-over" id="gameOverScreen" style="display: none;">
+        <div class="winner" id="winnerText"></div>
+        <div class="final-score" id="finalScore"></div>
+        <div class="restart-hint">按 R 重新开始 | 按 ESC 退出</div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
