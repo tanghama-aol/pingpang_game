@@ -1845,8 +1845,8 @@ class PingPongGame {
         this.ctx.fillRect(this.rightPaddle.x, this.rightPaddle.y, this.rightPaddle.width, this.rightPaddle.height);
         
         // 绘制像素小人（在桌子外但在canvas内）
-        console.log(`正在绘制左侧小人在: x=${this.leftCharacter.x}, y=${this.leftCharacter.y}`);
-        console.log(`正在绘制右侧小人在: x=${this.rightCharacter.x}, y=${this.rightCharacter.y}`);
+        //console.log(`正在绘制左侧小人在: x=${this.leftCharacter.x}, y=${this.leftCharacter.y}`);
+        //console.log(`正在绘制右侧小人在: x=${this.rightCharacter.x}, y=${this.rightCharacter.y}`);
         this.drawPixelCharacter(this.leftCharacter, true);
         this.drawPixelCharacter(this.rightCharacter, false);
         
@@ -2224,6 +2224,7 @@ class PingPongGame {
         this.finalScore.textContent = `最终比分：${leftTotal} - ${rightTotal}
         (${this.leftPlayerName}: ${this.leftScore}+${this.leftBonusScore} | ${this.rightPlayerName}: ${this.rightScore}+${this.rightBonusScore})`;
     }
+}
 
 // 初始化游戏
-const game = new PingPongGame();
+var game = new PingPongGame();
