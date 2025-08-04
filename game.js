@@ -297,6 +297,17 @@ class PingPongGame {
         });
     }
     
+    showLeaderboardFromGame() {
+        this.gameOverScreen.style.display = 'none';
+        this.leaderboard.style.display = 'flex';
+        this.loadScores();
+    }
+    
+    hideLeaderboardToGame() {
+        this.leaderboard.style.display = 'none';
+        this.gameOverScreen.style.display = 'block';
+    }
+    
     showLeaderboard() {
         this.startScreen.style.display = 'none';
         this.leaderboard.style.display = 'flex';
@@ -305,8 +316,12 @@ class PingPongGame {
     
     hideLeaderboard() {
         this.leaderboard.style.display = 'none';
-        this.startScreen.style.display = 'block';
-        this.startScreenLoop(); // 重新启动开始界面循环
+        if (this.gameState === 'gameOver') {
+            this.gameOverScreen.style.display = 'block';
+        } else {
+            this.startScreen.style.display = 'block';
+            this.startScreenLoop(); // 重新启动开始界面循环
+        }
     }
     
     async loadScores() {
@@ -740,18 +755,20 @@ class PingPongGame {
             if (this.gameState === 'playing') {
                 // 左侧玩家使用第一个手柄或键盘模拟
                 if (parseInt(id) === 0) {
-                    // 左摇杆或十字键控制左侧球拍
+                    // 左摇杆或十字键控制左侧球拍，对应键盘A/Z键
                     const leftY = gamepad.axes[1]; // 左摇杆Y轴
-                    const dpadUp = gamepad.buttons[12] && gamepad.buttons[12].pressed;
-                    const dpadDown = gamepad.buttons[13] && gamepad.buttons[13].pressed;
+                    const dpadUp = gamepad.buttons[12] && gamepad.buttons[12].pressed; // 方向键上，对应A键
+                    const dpadDown = gamepad.buttons[13] && gamepad.buttons[13].pressed; // 方向键下，对应Z键
+                    const buttonX = gamepad.buttons[2] && gamepad.buttons[2].pressed; // X按钮对应A键
+                    const buttonA = gamepad.buttons[0] && gamepad.buttons[0].pressed; // A按钮对应Z键
                     
-                    if (leftY < -0.3 || dpadUp) {
+                    if (leftY < -0.3 || dpadUp || buttonX) {
                         if (this.leftPaddle.y > 0) {
                             const leftSpeed = this.leftPaddle.speed * this.leftCharacter.paddleSpeedMultiplier;
                             this.leftPaddle.y -= leftSpeed;
                         }
                     }
-                    if (leftY > 0.3 || dpadDown) {
+                    if (leftY > 0.3 || dpadDown || buttonA) {
                         if (this.leftPaddle.y < this.canvas.height - this.leftPaddle.height) {
                             const leftSpeed = this.leftPaddle.speed * this.leftCharacter.paddleSpeedMultiplier;
                             this.leftPaddle.y += leftSpeed;
@@ -761,23 +778,26 @@ class PingPongGame {
                 
                 // 右侧玩家使用第二个手柄或第一个手柄的右摇杆
                 if (parseInt(id) === 1 || (parseInt(id) === 0 && Object.keys(this.gamepads).length === 1)) {
-                    // 如果只有一个手柄，右摇杆控制右侧球拍
+                    // 如果只有一个手柄，右摇杆控制右侧球拍，对应键盘↑/↓键
                     const rightY = parseInt(id) === 1 ? gamepad.axes[1] : gamepad.axes[3]; // 左摇杆或右摇杆Y轴
-                    const dpadLeft = gamepad.buttons[14] && gamepad.buttons[14].pressed;
-                    const dpadRight = gamepad.buttons[15] && gamepad.buttons[15].pressed;
-                    const buttonY = gamepad.buttons[3] && gamepad.buttons[3].pressed; // 对应↑/←键(上移)
-                    const buttonB = gamepad.buttons[1] && gamepad.buttons[1].pressed; // 对应↓/→键(下移)
+                    const dpadLeft = gamepad.buttons[14] && gamepad.buttons[14].pressed; // 方向键左，对应↑键
+                    const dpadRight = gamepad.buttons[15] && gamepad.buttons[15].pressed; // 方向键右，对应↓键
+                    const buttonY = gamepad.buttons[3] && gamepad.buttons[3].pressed; // Y按钮对应↑键
+                    const buttonB = gamepad.buttons[1] && gamepad.buttons[1].pressed; // B按钮对应↓键
+                    // 如果是第二个手柄，也可以使用方向键上下
+                    const dpadUp2 = (parseInt(id) === 1) && gamepad.buttons[12] && gamepad.buttons[12].pressed; // 方向键上
+                    const dpadDown2 = (parseInt(id) === 1) && gamepad.buttons[13] && gamepad.buttons[13].pressed; // 方向键下
                     
                     let rightPlayerControlled = false;
                     
-                    if (rightY < -0.3 || dpadLeft || buttonY) {
+                    if (rightY < -0.3 || dpadLeft || buttonY || dpadUp2) {
                         if (this.rightPaddle.y > 0) {
                             const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier;
                             this.rightPaddle.y -= rightSpeed;
                             rightPlayerControlled = true;
                         }
                     }
-                    if (rightY > 0.3 || dpadRight || buttonB) {
+                    if (rightY > 0.3 || dpadRight || buttonB || dpadDown2) {
                         if (this.rightPaddle.y < this.canvas.height - this.rightPaddle.height) {
                             const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier;
                             this.rightPaddle.y += rightSpeed;
@@ -876,6 +896,8 @@ class PingPongGame {
                     this.exitGame();
                 } else if (e.key.toLowerCase() === 'd') {
                     this.toggleDetailedStats();
+                } else if (e.key.toLowerCase() === 'l') {
+                    this.showLeaderboardFromGame();
                 }
             }
             
