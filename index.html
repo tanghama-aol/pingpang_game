@@ -414,6 +414,53 @@
             transform: scale(1.05);
             box-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
         }
+        .podium-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+        .podium-overlay {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 201;
+        }
+        .podium-title {
+            font-size: 64px;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+            margin-bottom: 20px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        .podium-subtitle {
+            font-size: 48px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            margin-bottom: 40px;
+        }
+        .skip-hint {
+            font-size: 28px;
+            color: #ccc;
+            background: rgba(0,0,0,0.6);
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 2px solid #666;
+        }
+        @keyframes glow {
+            from { text-shadow: 2px 2px 8px rgba(255,215,0,0.8), 0 0 25px rgba(255,215,0,0.5); }
+            to { text-shadow: 2px 2px 8px rgba(255,215,0,0.8), 0 0 35px rgba(255,215,0,0.8); }
+        }
     </style>
 </head>
 <body>
@@ -487,11 +534,20 @@
     </div>
 
     <div class="leaderboard" id="leaderboard">
-        <h2>🏆 最近10局对战记录</h2>
+        <h2 id="leaderboardTitle">🏆 最近10局对战记录</h2>
         <div class="score-list" id="scoreList">
             <!-- 分数列表将在这里动态生成 -->
         </div>
         <div class="back-button" onclick="game.hideLeaderboard()">返回开始界面</div>
+    </div>
+
+    <div class="podium-screen" id="podiumScreen" style="display: none;">
+        <canvas id="podiumCanvas" width="1200" height="800"></canvas>
+        <div class="podium-overlay">
+            <div class="podium-title">🏆 颁奖台 🏆</div>
+            <div class="podium-subtitle" id="podiumWinner"></div>
+            <div class="skip-hint">按任意键跳过 (自动跳转倒计时: <span id="podiumCountdown">20</span>s)</div>
+        </div>
     </div>
 
     <div class="game-over" id="gameOverScreen" style="display: none;">

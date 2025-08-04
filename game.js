@@ -5,7 +5,13 @@ class PingPongGame {
         this.startScreen = document.getElementById('startScreen');
         this.gameUI = document.getElementById('gameUI');
         this.gameOverScreen = document.getElementById('gameOverScreen');
+        this.podiumScreen = document.getElementById('podiumScreen');
+        this.podiumCanvas = document.getElementById('podiumCanvas');
+        this.podiumCtx = this.podiumCanvas ? this.podiumCanvas.getContext('2d') : null;
+        this.podiumWinner = document.getElementById('podiumWinner');
+        this.podiumCountdown = document.getElementById('podiumCountdown');
         this.leaderboard = document.getElementById('leaderboard');
+        this.leaderboardTitle = document.getElementById('leaderboardTitle');
         this.scoreList = document.getElementById('scoreList');
         this.leftScoreDisplay = document.getElementById('leftScore');
         this.rightScoreDisplay = document.getElementById('rightScore');
@@ -25,6 +31,14 @@ class PingPongGame {
         this.db = null;
         this.initDatabase();
         
+        // 排行榜系统
+        this.leaderboardState = {
+            currentView: 'recent', // 'recent' 或 'ranking'
+            switchTimer: 0,
+            switchInterval: 5000, // 5秒切换
+            autoSwitch: true
+        };
+        
         // 记录是否已经设置名字
         this.leftNameSet = false;
         this.rightNameSet = false;
@@ -40,15 +54,28 @@ class PingPongGame {
         this.autoMove = {
             enabled: false, // 是否启用自动移动
             lastControlTime: 0, // 最后一次手动控制时间
-            successRate: 0.75, // 接球成功概率（50%-99%之间）
-            reactionDelay: 300, // 反应延迟毫秒数
+            successRate: 0.8, // 接球成功概率（80%-99%之间）
+            reactionDelay: 200, // 反应延迟毫秒数（更快响应）
             lastDecisionTime: 0, // 最后一次决策时间
-            targetY: 0 // 目标Y位置
+            targetY: 0, // 目标Y位置
+            activationDelay: 5000 // 5秒后启动自动移动
         };
         
         // 游戏状态
-        this.gameState = 'start'; // 'start', 'playing', 'gameOver'
+        this.gameState = 'start'; // 'start', 'playing', 'gameOver', 'podium'
         this.showDetailedStats = false; // 是否显示详细统计
+        
+        // 领奖台系统
+        this.podiumState = {
+            active: false,
+            countdown: 20,
+            countdownTimer: 0,
+            winner: null, // 'left' 或 'right'
+            animationFrame: 0,
+            fireworks: [], // 礼花粒子数组
+            winnerDance: { frame: 0, speed: 0.2 },
+            loserSad: { frame: 0, speed: 0.1 }
+        };
         
         // 台球桌配置（扩大canvas以容纳小人）
         this.tableSizes = {
@@ -122,16 +149,13 @@ class PingPongGame {
         this.rightBonusScore = 0; // 奖励分数
         this.winningScore = 21;
         
-        // 像素苹果
-        this.apple = {
-            active: false,
-            x: 0,
-            y: 0,
-            size: 48, // 增大一倍
+        // 像素苹果系统（支持多个苹果）
+        this.apples = [];
+        this.appleSystem = {
+            maxApples: 3, // 最多同时出现3个苹果
             spawnTimer: 0,
-            spawnInterval: 600 + Math.random() * 1200, // 10-30秒随机生成
-            blinkTimer: 0,
-            visible: true
+            spawnInterval: 180 + Math.random() * 240, // 3-7秒随机生成（提高几率）
+            lastSpawnTime: 0
         };
         
         // 按键状态
@@ -297,25 +321,91 @@ class PingPongGame {
         });
     }
     
+    async getPlayerRankings() {
+        if (!this.db) return [];
+        
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['scores'], 'readonly');
+            const objectStore = transaction.objectStore('scores');
+            const request = objectStore.getAll();
+            
+            request.onsuccess = () => {
+                const scores = request.result;
+                
+                // 统计每个玩家的积分
+                const playerStats = {};
+                
+                scores.forEach(score => {
+                    // 左侧玩家
+                    if (!playerStats[score.leftPlayer]) {
+                        playerStats[score.leftPlayer] = {
+                            name: score.leftPlayer,
+                            totalScore: 0,
+                            wins: 0,
+                            games: 0
+                        };
+                    }
+                    playerStats[score.leftPlayer].totalScore += score.leftTotal;
+                    playerStats[score.leftPlayer].games += 1;
+                    if (score.winner === score.leftPlayer) {
+                        playerStats[score.leftPlayer].wins += 1;
+                    }
+                    
+                    // 右侧玩家
+                    if (!playerStats[score.rightPlayer]) {
+                        playerStats[score.rightPlayer] = {
+                            name: score.rightPlayer,
+                            totalScore: 0,
+                            wins: 0,
+                            games: 0
+                        };
+                    }
+                    playerStats[score.rightPlayer].totalScore += score.rightTotal;
+                    playerStats[score.rightPlayer].games += 1;
+                    if (score.winner === score.rightPlayer) {
+                        playerStats[score.rightPlayer].wins += 1;
+                    }
+                });
+                
+                // 转换为数组并按总积分排序
+                const rankings = Object.values(playerStats)
+                    .sort((a, b) => b.totalScore - a.totalScore)
+                    .slice(0, 10); // 只显示前10名
+                
+                resolve(rankings);
+            };
+            
+            request.onerror = () => {
+                reject(request.error);
+            };
+        });
+    }
+    
     showLeaderboardFromGame() {
         this.gameOverScreen.style.display = 'none';
         this.leaderboard.style.display = 'flex';
+        this.resetLeaderboardState();
         this.loadScores();
+        this.startLeaderboardLoop();
     }
     
     hideLeaderboardToGame() {
         this.leaderboard.style.display = 'none';
         this.gameOverScreen.style.display = 'block';
+        this.leaderboardState.autoSwitch = false;
     }
     
     showLeaderboard() {
         this.startScreen.style.display = 'none';
         this.leaderboard.style.display = 'flex';
+        this.resetLeaderboardState();
         this.loadScores();
+        this.startLeaderboardLoop();
     }
     
     hideLeaderboard() {
         this.leaderboard.style.display = 'none';
+        this.leaderboardState.autoSwitch = false;
         if (this.gameState === 'gameOver') {
             this.gameOverScreen.style.display = 'block';
         } else {
@@ -324,16 +414,50 @@ class PingPongGame {
         }
     }
     
+    resetLeaderboardState() {
+        this.leaderboardState.currentView = 'recent';
+        this.leaderboardState.switchTimer = Date.now();
+        this.leaderboardState.autoSwitch = true;
+    }
+    
+    startLeaderboardLoop() {
+        if (this.leaderboard.style.display === 'flex' && this.leaderboardState.autoSwitch) {
+            this.updateLeaderboard();
+            setTimeout(() => this.startLeaderboardLoop(), 100);
+        }
+    }
+    
+    updateLeaderboard() {
+        const now = Date.now();
+        
+        // 检查是否需要切换视图
+        if (now - this.leaderboardState.switchTimer >= this.leaderboardState.switchInterval) {
+            this.leaderboardState.currentView = this.leaderboardState.currentView === 'recent' ? 'ranking' : 'recent';
+            this.leaderboardState.switchTimer = now;
+            
+            // 重新渲染排行榜
+            this.loadScores();
+        }
+    }
+    
     async loadScores() {
         try {
-            const scores = await this.getScores();
-            this.renderScores(scores);
+            if (this.leaderboardState.currentView === 'recent') {
+                const scores = await this.getScores();
+                this.renderRecentScores(scores);
+            } else {
+                const rankings = await this.getPlayerRankings();
+                this.renderPlayerRankings(rankings);
+            }
         } catch (error) {
             console.error('加载分数失败:', error);
         }
     }
     
-    renderScores(scores) {
+    renderRecentScores(scores) {
+        // 更新标题
+        this.leaderboardTitle.textContent = '🏆 最近10局对战记录';
+        
         if (scores.length === 0) {
             this.scoreList.innerHTML = '<div style="color: #ccc; font-size: 24px; text-align: center; padding: 40px;">暂无分数记录</div>';
             return;
@@ -370,6 +494,46 @@ class PingPongGame {
                     <div class="score-points">
                         <div style="color: #4ECDC4; font-size: 24px;">${score.winner}</div>
                         <div style="color: #96CEB4; font-size: 14px;">获胜</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    renderPlayerRankings(rankings) {
+        // 更新标题
+        this.leaderboardTitle.textContent = '👑 玩家积分排行榜';
+        
+        if (rankings.length === 0) {
+            this.scoreList.innerHTML = '<div style="color: #ccc; font-size: 24px; text-align: center; padding: 40px;">暂无玩家数据</div>';
+            return;
+        }
+        
+        this.scoreList.innerHTML = rankings.map((player, index) => {
+            // 根据排名显示特殊样式（前3名）
+            const rankClass = index === 0 ? 'first' : index === 1 ? 'second' : index === 2 ? 'third' : '';
+            const rankEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`;
+            
+            // 计算胜率
+            const winRate = player.games > 0 ? Math.round((player.wins / player.games) * 100) : 0;
+            
+            return `
+                <div class="score-item ${rankClass}">
+                    <div class="score-rank">${rankEmoji}</div>
+                    <div class="score-names">
+                        <div style="font-size: 24px; color: #FFD700; font-weight: bold;">
+                            ${player.name}
+                        </div>
+                        <div style="font-size: 16px; color: #ccc; margin: 4px 0;">
+                            胜场: ${player.wins}/${player.games} (${winRate}%)
+                        </div>
+                        <div style="font-size: 14px; color: #888;">
+                            场均: ${(player.totalScore / Math.max(player.games, 1)).toFixed(1)}分
+                        </div>
+                    </div>
+                    <div class="score-points">
+                        <div style="color: #4ECDC4; font-size: 28px; font-weight: bold;">${player.totalScore}</div>
+                        <div style="color: #96CEB4; font-size: 14px;">总积分</div>
                     </div>
                 </div>
             `;
@@ -437,39 +601,102 @@ class PingPongGame {
         return colors[Math.floor(Math.random() * colors.length)];
     }
     
-    spawnApple() {
-        if (!this.apple.active) {
-            // 随机位置生成苹果，避免在球拍区域
-            const tableSize = this.tableSizes[this.currentTableSize];
-            const tableWidth = tableSize.tableWidth || tableSize.width;
-            const tableHeight = tableSize.tableHeight || tableSize.height;
-            const tableOffsetX = (this.canvas.width - tableWidth) / 2;
-            const tableOffsetY = (this.canvas.height - tableHeight) / 2;
-            
-            this.apple.x = tableOffsetX + tableWidth * 0.25 + Math.random() * (tableWidth * 0.5); // 在中间区域生成
-            this.apple.y = tableOffsetY + tableHeight * 0.125 + Math.random() * (tableHeight * 0.75); // 避免边界
-            this.apple.active = true;
-            this.apple.blinkTimer = 0;
-            this.apple.visible = true;
-            this.apple.spawnInterval = 600 + Math.random() * 1200; // 重置生成间隔
+    spawnApples() {
+        const now = Date.now();
+        
+        // 检查是否到了生成时间
+        if (now - this.appleSystem.lastSpawnTime >= this.appleSystem.spawnInterval * 16.67) { // 转换为毫秒
+            // 如果当前苹果数量未达到最大值，可以生成新苹果
+            if (this.apples.length < this.appleSystem.maxApples) {
+                // 随机决定生成1-3个苹果
+                const applesCount = Math.min(
+                    Math.floor(Math.random() * 3) + 1, // 1-3个
+                    this.appleSystem.maxApples - this.apples.length // 不超过剩余容量
+                );
+                
+                for (let i = 0; i < applesCount; i++) {
+                    this.createApple();
+                }
+                
+                // 重置生成间隔
+                this.appleSystem.spawnInterval = 180 + Math.random() * 240; // 3-7秒
+                this.appleSystem.lastSpawnTime = now;
+            }
         }
     }
     
-    updateApple() {
-        if (this.apple.active) {
+    createApple() {
+        // 随机位置生成苹果，避免在球拍区域和其他苹果位置
+        const tableSize = this.tableSizes[this.currentTableSize];
+        const tableWidth = tableSize.tableWidth || tableSize.width;
+        const tableHeight = tableSize.tableHeight || tableSize.height;
+        const tableOffsetX = (this.canvas.width - tableWidth) / 2;
+        const tableOffsetY = (this.canvas.height - tableHeight) / 2;
+        
+        let attempts = 0;
+        let validPosition = false;
+        let newApple;
+        
+        // 最多尝试10次找到合适位置
+        while (!validPosition && attempts < 10) {
+            newApple = {
+                x: tableOffsetX + tableWidth * 0.25 + Math.random() * (tableWidth * 0.5),
+                y: tableOffsetY + tableHeight * 0.125 + Math.random() * (tableHeight * 0.75),
+                size: 48,
+                blinkTimer: 0,
+                visible: true,
+                life: 600 + Math.random() * 600 // 10-20秒生命周期
+            };
+            
+            // 检查是否与现有苹果位置冲突
+            validPosition = true;
+            for (const existingApple of this.apples) {
+                const distance = Math.sqrt(
+                    Math.pow(newApple.x - existingApple.x, 2) + 
+                    Math.pow(newApple.y - existingApple.y, 2)
+                );
+                if (distance < 100) { // 保持100像素距离
+                    validPosition = false;
+                    break;
+                }
+            }
+            
+            attempts++;
+        }
+        
+        if (validPosition) {
+            this.apples.push(newApple);
+        }
+    }
+    
+    updateApples() {
+        // 生成新苹果
+        this.spawnApples();
+        
+        // 更新所有现有苹果
+        for (let i = this.apples.length - 1; i >= 0; i--) {
+            const apple = this.apples[i];
+            
             // 闪烁效果
-            this.apple.blinkTimer++;
-            if (this.apple.blinkTimer % 20 === 0) {
-                this.apple.visible = !this.apple.visible;
+            apple.blinkTimer++;
+            if (apple.blinkTimer % 20 === 0) {
+                apple.visible = !apple.visible;
+            }
+            
+            // 减少生命周期
+            apple.life--;
+            if (apple.life <= 0) {
+                this.apples.splice(i, 1);
+                continue;
             }
             
             // 检查与球的碰撞
             const distance = Math.sqrt(
-                Math.pow(this.ball.x - this.apple.x, 2) + 
-                Math.pow(this.ball.y - this.apple.y, 2)
+                Math.pow(this.ball.x - apple.x, 2) + 
+                Math.pow(this.ball.y - apple.y, 2)
             );
             
-            if (distance < (this.ball.size / 2 + this.apple.size / 2)) {
+            if (distance < (this.ball.size / 2 + apple.size / 2)) {
                 // 苹果被击中，奖励最后一次击球的玩家
                 if (this.lastHitPlayer === 'left') {
                     this.leftBonusScore++;
@@ -494,45 +721,41 @@ class PingPongGame {
                     }
                 }
                 
-                this.apple.active = false;
-                this.apple.spawnTimer = 0;
+                // 移除被击中的苹果
+                this.apples.splice(i, 1);
                 
                 // 播放击球音效表示击中苹果
                 this.hitSound.currentTime = 0;
                 this.hitSound.play().catch(e => console.log('音效播放失败:', e));
             }
-        } else {
-            // 苹果未激活时，计时器递增
-            this.apple.spawnTimer++;
-            if (this.apple.spawnTimer >= this.apple.spawnInterval) {
-                this.spawnApple();
-            }
         }
     }
     
-    drawApple() {
-        if (!this.apple.active || !this.apple.visible) return;
-        
-        const ctx = this.ctx;
-        const x = this.apple.x;
-        const y = this.apple.y;
-        const size = this.apple.size / 12; // 缩放比例
-        
-        // 绘制像素苹果（大一倍的版本）
-        ctx.fillStyle = '#FF4444'; // 红色苹果
-        
-        // 苹果主体
-        ctx.fillRect(x - 4*size, y - 2*size, 8*size, 6*size);
-        ctx.fillRect(x - 2*size, y - 4*size, 4*size, 2*size);
-        ctx.fillRect(x - 3*size, y + 4*size, 6*size, 2*size);
-        
-        // 苹果叶子
-        ctx.fillStyle = '#44FF44'; // 绿色叶子
-        ctx.fillRect(x + 1*size, y - 6*size, 2*size, 2*size);
-        
-        // 苹果梗
-        ctx.fillStyle = '#8B4513'; // 棕色梗
-        ctx.fillRect(x, y - 5*size, 1*size, 1*size);
+    drawApples() {
+        for (const apple of this.apples) {
+            if (!apple.visible) continue;
+            
+            const ctx = this.ctx;
+            const x = apple.x;
+            const y = apple.y;
+            const size = apple.size / 12; // 缩放比例
+            
+            // 绘制像素苹果（大一倍的版本）
+            ctx.fillStyle = '#FF4444'; // 红色苹果
+            
+            // 苹果主体
+            ctx.fillRect(x - 4*size, y - 2*size, 8*size, 6*size);
+            ctx.fillRect(x - 2*size, y - 4*size, 4*size, 2*size);
+            ctx.fillRect(x - 3*size, y + 4*size, 6*size, 2*size);
+            
+            // 苹果叶子
+            ctx.fillStyle = '#44FF44'; // 绿色叶子
+            ctx.fillRect(x + 1*size, y - 6*size, 2*size, 2*size);
+            
+            // 苹果梗
+            ctx.fillStyle = '#8B4513'; // 棕色梗
+            ctx.fillRect(x, y - 5*size, 1*size, 1*size);
+        }
     }
 
     drawPixelCharacter(character, isLeft) {
@@ -735,10 +958,28 @@ class PingPongGame {
                 
                 // 游戏结束界面的手柄控制
                 if (this.gameState === 'gameOver') {
-                    // A按键对应R键重新开始
-                    if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
-                        this.resetGame();
+                    // 显示光标以便选择
+                    this.cursor.visible = true;
+                    
+                    // 摇杆控制光标
+                    const leftX = gamepad.axes[0];
+                    const leftY = gamepad.axes[1];
+                    
+                    if (Math.abs(leftX) > 0.2) {
+                        this.cursor.x += leftX * this.cursor.speed;
+                        this.cursor.x = Math.max(0, Math.min(window.innerWidth, this.cursor.x));
                     }
+                    if (Math.abs(leftY) > 0.2) {
+                        this.cursor.y += leftY * this.cursor.speed;
+                        this.cursor.y = Math.max(0, Math.min(window.innerHeight, this.cursor.y));
+                    }
+                    
+                    // A按键点击（用于点击按钮）
+                    if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
+                        this.handleGamepadClick();
+                    }
+                    
+                    // 其他按键快捷键
                     // B按键或Select按键对应ESC键退出
                     if ((gamepad.buttons[1] && gamepad.buttons[1].pressed) ||
                         (gamepad.buttons[8] && gamepad.buttons[8].pressed)) {
@@ -747,6 +988,18 @@ class PingPongGame {
                     // Y按键对应D键查看详细统计
                     if (gamepad.buttons[3] && gamepad.buttons[3].pressed) {
                         this.toggleDetailedStats();
+                    }
+                    // X按键对应R键重新开始
+                    if (gamepad.buttons[2] && gamepad.buttons[2].pressed) {
+                        this.resetGame();
+                    }
+                    
+                    // 更新光标显示
+                    this.updateCursorDisplay();
+                } else if (this.gameState === 'podium') {
+                    // 领奖台界面A键跳过
+                    if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
+                        this.hidePodium();
                     }
                 }
             }
@@ -899,6 +1152,9 @@ class PingPongGame {
                 } else if (e.key.toLowerCase() === 'l') {
                     this.showLeaderboardFromGame();
                 }
+            } else if (this.gameState === 'podium') {
+                // 领奖台界面，任意键跳过
+                this.hidePodium();
             }
             
             // 全局ESC键处理
@@ -958,7 +1214,7 @@ class PingPongGame {
         this.autoMove.enabled = false;
         this.autoMove.targetY = this.rightPaddle.y;
         this.autoMove.lastDecisionTime = 0;
-        this.autoMove.successRate = 0.5 + Math.random() * 0.49; // 50%-99%随机成功率
+        this.autoMove.successRate = 0.8 + Math.random() * 0.19; // 80%-99%随机成功率
         
         // 重置小人增强状态
         this.resetCharacterEnhancement('left');
@@ -976,8 +1232,9 @@ class PingPongGame {
         this.rightScore = 0;
         this.leftBonusScore = 0;
         this.rightBonusScore = 0;
-        this.apple.active = false;
-        this.apple.spawnTimer = 0;
+        this.apples = []; // 清空所有苹果
+        this.appleSystem.spawnTimer = 0;
+        this.appleSystem.lastSpawnTime = Date.now();
         this.ball.x = this.canvas.width / 2;
         this.ball.y = this.canvas.height / 2;
         this.ball.dx = this.ball.baseSpeed * (Math.random() > 0.5 ? 1 : -1);
@@ -1003,7 +1260,7 @@ class PingPongGame {
         this.autoMove.enabled = false;
         this.autoMove.targetY = this.rightPaddle.y;
         this.autoMove.lastDecisionTime = 0;
-        this.autoMove.successRate = 0.5 + Math.random() * 0.49; // 50%-99%随机成功率
+        this.autoMove.successRate = 0.8 + Math.random() * 0.19; // 80%-99%随机成功率
         
         // 重置小人增强状态
         this.resetCharacterEnhancement('left');
@@ -1152,9 +1409,9 @@ class PingPongGame {
                 this.autoMove.lastControlTime = Date.now();
                 this.autoMove.enabled = false;
             } else {
-                // 检查10秒内无控制
+                // 检查5秒内无控制
                 const timeSinceLastControl = Date.now() - this.autoMove.lastControlTime;
-                if (timeSinceLastControl > 10000) { // 10秒
+                if (timeSinceLastControl > this.autoMove.activationDelay) { // 5秒
                     this.autoMove.enabled = true;
                 }
             }
@@ -1228,7 +1485,7 @@ class PingPongGame {
         }
         
         // 平滑移动到目标位置
-        const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier * 0.8; // 自动移动稍慢一些
+        const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier * 1.2; // 自动移动更快一些
         const diff = this.autoMove.targetY - this.rightPaddle.y;
         
         if (Math.abs(diff) > 2) {
@@ -1434,9 +1691,8 @@ class PingPongGame {
     }
     
     endGame() {
-        this.gameState = 'gameOver';
+        this.gameState = 'podium';
         this.gameUI.style.display = 'none';
-        this.gameOverScreen.style.display = 'block';
         
         // 播放结束一局的音效
         this.gameEndSound.currentTime = 0;
@@ -1458,14 +1714,8 @@ class PingPongGame {
             this.currentGameTime
         );
         
-        if (leftTotal >= this.winningScore) {
-            this.winnerText.textContent = `${this.leftPlayerName}获胜！`;
-        } else {
-            this.winnerText.textContent = `${this.rightPlayerName}获胜！`;
-        }
-        
-        this.finalScore.textContent = `最终比分：${leftTotal} - ${rightTotal}
-        (${this.leftPlayerName}: ${this.leftScore}+${this.leftBonusScore} | ${this.rightPlayerName}: ${this.rightScore}+${this.rightBonusScore})`;
+        // 显示领奖台
+        this.showPodium(leftTotal >= this.winningScore ? 'left' : 'right');
     }
     
     drawBackground() {
@@ -1632,7 +1882,7 @@ class PingPongGame {
         this.drawScoreAnimation();
         
         // 绘制苹果
-        this.drawApple();
+        this.drawApples();
     }
     
     enhanceCharacter(side) {
@@ -1706,7 +1956,7 @@ class PingPongGame {
         if (this.gameState === 'playing') {
             this.updatePaddles();
             this.updateBall();
-            this.updateApple(); // 更新苹果
+            this.updateApples(); // 更新苹果系统
             this.updateOutOfBoundsAnimation();
             this.updateScoreAnimation(); // 更新得分动画
             this.updateScore(); // 实时更新计分板和时间
@@ -1714,7 +1964,266 @@ class PingPongGame {
             requestAnimationFrame(() => this.gameLoop());
         }
     }
-}
+    
+    showPodium(winner) {
+        this.podiumState.active = true;
+        this.podiumState.winner = winner;
+        this.podiumState.countdown = 20;
+        this.podiumState.countdownTimer = 0;
+        this.podiumState.animationFrame = 0;
+        this.podiumState.fireworks = [];
+        this.podiumState.winnerDance.frame = 0;
+        this.podiumState.loserSad.frame = 0;
+        
+        // 显示领奖台界面
+        this.podiumScreen.style.display = 'flex';
+        
+        // 设置获胜者文本
+        const winnerName = winner === 'left' ? this.leftPlayerName : this.rightPlayerName;
+        this.podiumWinner.textContent = `🎉 恭喜 ${winnerName} 获得胜利！🎉`;
+        
+        // 启动领奖台动画循环
+        this.podiumLoop();
+    }
+    
+    podiumLoop() {
+        if (this.gameState === 'podium' && this.podiumState.active) {
+            this.updatePodium();
+            this.drawPodium();
+            requestAnimationFrame(() => this.podiumLoop());
+        }
+    }
+    
+    updatePodium() {
+        // 更新倒计时
+        this.podiumState.countdownTimer++;
+        if (this.podiumState.countdownTimer >= 60) { // 每秒更新一次倒计时
+            this.podiumState.countdown--;
+            this.podiumState.countdownTimer = 0;
+            this.podiumCountdown.textContent = Math.max(0, this.podiumState.countdown);
+            
+            if (this.podiumState.countdown <= 0) {
+                this.hidePodium();
+                return;
+            }
+        }
+        
+        // 更新动画帧
+        this.podiumState.animationFrame++;
+        this.podiumState.winnerDance.frame += this.podiumState.winnerDance.speed;
+        this.podiumState.loserSad.frame += this.podiumState.loserSad.speed;
+        
+        // 创建礼花粒子
+        if (this.podiumState.animationFrame % 10 === 0) {
+            this.createFirework();
+        }
+        
+        // 更新礼花粒子
+        this.updateFireworks();
+    }
+    
+    createFirework() {
+        // 随机创建礼花粒子
+        const x = Math.random() * this.podiumCanvas.width;
+        const y = Math.random() * 200 + 200; // 在上方区域
+        
+        for (let i = 0; i < 8; i++) {
+            const angle = (Math.PI * 2 * i) / 8;
+            const speed = 2 + Math.random() * 3;
+            const color = this.getRandomBrightColor();
+            
+            this.podiumState.fireworks.push({
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1.0,
+                decay: 0.015,
+                color: color,
+                size: 3 + Math.random() * 2
+            });
+        }
+    }
+    
+    updateFireworks() {
+        for (let i = this.podiumState.fireworks.length - 1; i >= 0; i--) {
+            const firework = this.podiumState.fireworks[i];
+            
+            firework.x += firework.vx;
+            firework.y += firework.vy;
+            firework.vy += 0.1; // 重力
+            firework.life -= firework.decay;
+            
+            if (firework.life <= 0) {
+                this.podiumState.fireworks.splice(i, 1);
+            }
+        }
+    }
+    
+    drawPodium() {
+        if (!this.podiumCtx) return;
+        
+        // 清空画布
+        this.podiumCtx.fillStyle = 'rgba(30, 60, 114, 0.1)';
+        this.podiumCtx.fillRect(0, 0, this.podiumCanvas.width, this.podiumCanvas.height);
+        
+        // 绘制领奖台
+        this.drawPodiumPlatform();
+        
+        // 绘制小人
+        this.drawPodiumCharacters();
+        
+        // 绘制礼花
+        this.drawFireworks();
+    }
+    
+    drawPodiumPlatform() {
+        const ctx = this.podiumCtx;
+        const centerX = this.podiumCanvas.width / 2;
+        const baseY = this.podiumCanvas.height - 150;
+        
+        // 绘制领奖台底座
+        // 第一名台子（中间最高）
+        ctx.fillStyle = '#FFD700';
+        ctx.fillRect(centerX - 60, baseY - 120, 120, 120);
+        ctx.fillStyle = '#FFA500';
+        ctx.fillRect(centerX - 60, baseY - 125, 120, 5);
+        
+        // 第二名台子（左侧较低）
+        ctx.fillStyle = '#C0C0C0';
+        ctx.fillRect(centerX - 200, baseY - 80, 100, 80);
+        ctx.fillStyle = '#A0A0A0';
+        ctx.fillRect(centerX - 200, baseY - 85, 100, 5);
+        
+        // 绘制台子标签
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('🥇', centerX, baseY - 60);
+        ctx.fillText('🥈', centerX - 150, baseY - 40);
+    }
+    
+    drawPodiumCharacters() {
+        const ctx = this.podiumCtx;
+        const centerX = this.podiumCanvas.width / 2;
+        const baseY = this.podiumCanvas.height - 150;
+        
+        const winnerCharacter = this.podiumState.winner === 'left' ? this.leftCharacter : this.rightCharacter;
+        const loserCharacter = this.podiumState.winner === 'left' ? this.rightCharacter : this.leftCharacter;
+        
+        // 绘制获胜者（在第一名台子上跳舞）
+        const winnerX = centerX;
+        const winnerY = baseY - 120 - 50;
+        const danceOffset = Math.sin(this.podiumState.winnerDance.frame) * 10;
+        const armSwing = Math.sin(this.podiumState.winnerDance.frame * 2) * 20;
+        
+        this.drawPodiumCharacter(ctx, winnerX, winnerY + danceOffset, winnerCharacter, true, armSwing);
+        
+        // 绘制失败者（在第二名台子上沮丧）
+        const loserX = centerX - 150;
+        const loserY = baseY - 80 - 50;
+        const sadOffset = Math.sin(this.podiumState.loserSad.frame) * 2;
+        
+        this.drawPodiumCharacter(ctx, loserX, loserY + sadOffset, loserCharacter, false, 0);
+    }
+    
+    drawPodiumCharacter(ctx, x, y, character, isWinner, armOffset) {
+        const scale = 1.5;
+        const bodyColor = character === this.leftCharacter ? '#FF4444' : '#44AAFF';
+        const skinColor = '#FFDBAC';
+        const paddleColor = '#8B4513';
+        
+        ctx.save();
+        
+        // 如果是获胜者，添加发光效果
+        if (isWinner) {
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 20;
+        }
+        
+        // 身体
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(x - 7*scale, y - 5*scale, 14*scale, 20*scale);
+        
+        // 头部
+        ctx.fillStyle = skinColor;
+        ctx.fillRect(x - 4*scale, y - 15*scale, 8*scale, 8*scale);
+        
+        // 表情
+        ctx.fillStyle = '#000';
+        if (isWinner) {
+            // 高兴的表情
+            ctx.fillRect(x - 2*scale, y - 13*scale, 1*scale, 1*scale);
+            ctx.fillRect(x + 1*scale, y - 13*scale, 1*scale, 1*scale);
+            // 笑脸
+            ctx.beginPath();
+            ctx.arc(x, y - 10*scale, 2*scale, 0, Math.PI);
+            ctx.stroke();
+        } else {
+            // 沮丧的表情
+            ctx.fillRect(x - 2*scale, y - 13*scale, 1*scale, 2*scale);
+            ctx.fillRect(x + 1*scale, y - 13*scale, 1*scale, 2*scale);
+            // 沮丧的嘴
+            ctx.beginPath();
+            ctx.arc(x, y - 8*scale, 2*scale, Math.PI, 0);
+            ctx.stroke();
+        }
+        
+        // 手臂（获胜者挥舞手臂）
+        ctx.fillStyle = skinColor;
+        if (isWinner) {
+            ctx.fillRect(x - 10*scale, y - 2*scale + armOffset/2, 3*scale, 6*scale);
+            ctx.fillRect(x + 7*scale, y - 2*scale - armOffset/2, 3*scale, 6*scale);
+        } else {
+            ctx.fillRect(x - 10*scale, y + 2*scale, 3*scale, 6*scale);
+            ctx.fillRect(x + 7*scale, y + 2*scale, 3*scale, 6*scale);
+        }
+        
+        // 腿部
+        ctx.fillRect(x - 3*scale, y + 15*scale, 2*scale, 8*scale);
+        ctx.fillRect(x + 1*scale, y + 15*scale, 2*scale, 8*scale);
+        
+        ctx.restore();
+    }
+    
+    drawFireworks() {
+        const ctx = this.podiumCtx;
+        
+        for (const firework of this.podiumState.fireworks) {
+            ctx.save();
+            ctx.globalAlpha = firework.life;
+            ctx.fillStyle = firework.color;
+            ctx.beginPath();
+            ctx.arc(firework.x, firework.y, firework.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+    
+    hidePodium() {
+        this.podiumState.active = false;
+        this.podiumScreen.style.display = 'none';
+        
+        // 显示游戏结束界面
+        this.showGameOverScreen();
+    }
+    
+    showGameOverScreen() {
+        this.gameState = 'gameOver';
+        this.gameOverScreen.style.display = 'block';
+        
+        const leftTotal = this.leftScore + this.leftBonusScore;
+        const rightTotal = this.rightScore + this.rightBonusScore;
+        
+        if (leftTotal >= this.winningScore) {
+            this.winnerText.textContent = `${this.leftPlayerName}获胜！`;
+        } else {
+            this.winnerText.textContent = `${this.rightPlayerName}获胜！`;
+        }
+        
+        this.finalScore.textContent = `最终比分：${leftTotal} - ${rightTotal}
+        (${this.leftPlayerName}: ${this.leftScore}+${this.leftBonusScore} | ${this.rightPlayerName}: ${this.rightScore}+${this.rightBonusScore})`;
+    }
 
 // 初始化游戏
 const game = new PingPongGame();
