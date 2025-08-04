@@ -36,6 +36,16 @@ class PingPongGame {
         this.bonusScores = document.getElementById('bonusScores');
         this.gameDuration = document.getElementById('gameDuration');
 
+        // 自动移动系统（右侧玩家唐林专用）
+        this.autoMove = {
+            enabled: false, // 是否启用自动移动
+            lastControlTime: 0, // 最后一次手动控制时间
+            successRate: 0.75, // 接球成功概率（50%-99%之间）
+            reactionDelay: 300, // 反应延迟毫秒数
+            lastDecisionTime: 0, // 最后一次决策时间
+            targetY: 0 // 目标Y位置
+        };
+        
         // 游戏状态
         this.gameState = 'start'; // 'start', 'playing', 'gameOver'
         this.showDetailedStats = false; // 是否显示详细统计
@@ -170,7 +180,9 @@ class PingPongGame {
             size: 2.0, // 大小比例
             isEnhanced: false, // 是否被增强（击中苹果）
             enhancedTimer: 0, // 增强状态倒计时
-            paddleSpeedMultiplier: 1.0 // 球拍速度倍数
+            paddleSpeedMultiplier: 1.0, // 球拍速度倍数
+            enhancementCount: 0, // 累积增强次数（最多5次）
+            paddleHeightMultiplier: 1.0 // 球拍长度倍数
         };
         
         this.rightCharacter = {
@@ -183,7 +195,9 @@ class PingPongGame {
             size: 2.0, // 大小比例  
             isEnhanced: false, // 是否被增强（击中苹果）
             enhancedTimer: 0, // 增强状态倒计时
-            paddleSpeedMultiplier: 1.0 // 球拍速度倍数
+            paddleSpeedMultiplier: 1.0, // 球拍速度倍数
+            enhancementCount: 0, // 累积增强次数（最多5次）
+            paddleHeightMultiplier: 1.0 // 球拍长度倍数
         };
         
         // 得分动画
@@ -272,9 +286,9 @@ class PingPongGame {
             
             request.onsuccess = () => {
                 const scores = request.result;
-                // 按总分排序
-                scores.sort((a, b) => b.totalScore - a.totalScore);
-                resolve(scores.slice(0, 10)); // 只返回前10名
+                // 按时间排序，显示最近10局对战
+                scores.sort((a, b) => new Date(b.date) - new Date(a.date));
+                resolve(scores.slice(0, 10)); // 只返回最近10局
             };
             
             request.onerror = () => {
@@ -311,14 +325,37 @@ class PingPongGame {
         }
         
         this.scoreList.innerHTML = scores.map((score, index) => {
+            // 根据获胜者显示特殊样式（前3名）
             const rankClass = index === 0 ? 'first' : index === 1 ? 'second' : index === 2 ? 'third' : '';
-            const rankEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
+            const rankNumber = index + 1;
+            const rankEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : rankNumber;
+            
+            // 格式化日期
+            const gameDate = new Date(score.date);
+            const dateStr = `${gameDate.getMonth() + 1}/${gameDate.getDate()} ${gameDate.getHours()}:${gameDate.getMinutes().toString().padStart(2, '0')}`;
+            
+            // 显示比分，获胜者高亮
+            const leftTotal = score.leftScore + score.leftBonus;
+            const rightTotal = score.rightScore + score.rightBonus;
+            const isLeftWinner = leftTotal > rightTotal;
             
             return `
                 <div class="score-item ${rankClass}">
                     <div class="score-rank">${rankEmoji}</div>
-                    <div class="score-names">${score.leftPlayer} vs ${score.rightPlayer}</div>
-                    <div class="score-points">${score.totalScore}</div>
+                    <div class="score-names">
+                        <div style="font-size: 20px; color: ${isLeftWinner ? '#FFD700' : '#ccc'}">
+                            ${score.leftPlayer}: ${leftTotal}
+                        </div>
+                        <div style="font-size: 16px; color: #666; margin: 2px 0;">VS</div>
+                        <div style="font-size: 20px; color: ${!isLeftWinner ? '#FFD700' : '#ccc'}">
+                            ${score.rightPlayer}: ${rightTotal}
+                        </div>
+                        <div style="font-size: 14px; color: #888; margin-top: 4px;">${dateStr}</div>
+                    </div>
+                    <div class="score-points">
+                        <div style="color: #4ECDC4; font-size: 24px;">${score.winner}</div>
+                        <div style="color: #96CEB4; font-size: 14px;">获胜</div>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -680,6 +717,23 @@ class PingPongGame {
             } else {
                 // 在游戏中隐藏光标
                 this.cursor.visible = false;
+                
+                // 游戏结束界面的手柄控制
+                if (this.gameState === 'gameOver') {
+                    // A按键对应R键重新开始
+                    if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
+                        this.resetGame();
+                    }
+                    // B按键或Select按键对应ESC键退出
+                    if ((gamepad.buttons[1] && gamepad.buttons[1].pressed) ||
+                        (gamepad.buttons[8] && gamepad.buttons[8].pressed)) {
+                        this.exitGame();
+                    }
+                    // Y按键对应D键查看详细统计
+                    if (gamepad.buttons[3] && gamepad.buttons[3].pressed) {
+                        this.toggleDetailedStats();
+                    }
+                }
             }
             
             // 游戏进行中的控制
@@ -711,18 +765,30 @@ class PingPongGame {
                     const rightY = parseInt(id) === 1 ? gamepad.axes[1] : gamepad.axes[3]; // 左摇杆或右摇杆Y轴
                     const dpadLeft = gamepad.buttons[14] && gamepad.buttons[14].pressed;
                     const dpadRight = gamepad.buttons[15] && gamepad.buttons[15].pressed;
+                    const buttonY = gamepad.buttons[3] && gamepad.buttons[3].pressed; // 对应↑/←键(上移)
+                    const buttonB = gamepad.buttons[1] && gamepad.buttons[1].pressed; // 对应↓/→键(下移)
                     
-                    if (rightY < -0.3 || dpadLeft) {
+                    let rightPlayerControlled = false;
+                    
+                    if (rightY < -0.3 || dpadLeft || buttonY) {
                         if (this.rightPaddle.y > 0) {
                             const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier;
                             this.rightPaddle.y -= rightSpeed;
+                            rightPlayerControlled = true;
                         }
                     }
-                    if (rightY > 0.3 || dpadRight) {
+                    if (rightY > 0.3 || dpadRight || buttonB) {
                         if (this.rightPaddle.y < this.canvas.height - this.rightPaddle.height) {
                             const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier;
                             this.rightPaddle.y += rightSpeed;
+                            rightPlayerControlled = true;
                         }
+                    }
+                    
+                    // 更新自动移动系统的控制状态（仅当右侧玩家是唐林时）
+                    if (this.rightPlayerName === '唐林' && rightPlayerControlled) {
+                        this.autoMove.lastControlTime = Date.now();
+                        this.autoMove.enabled = false;
                     }
                 }
             }
@@ -865,6 +931,17 @@ class PingPongGame {
         this.gameState = 'playing';
         this.gameStartTime = Date.now();
         
+        // 初始化自动移动系统
+        this.autoMove.lastControlTime = Date.now();
+        this.autoMove.enabled = false;
+        this.autoMove.targetY = this.rightPaddle.y;
+        this.autoMove.lastDecisionTime = 0;
+        this.autoMove.successRate = 0.5 + Math.random() * 0.49; // 50%-99%随机成功率
+        
+        // 重置小人增强状态
+        this.resetCharacterEnhancement('left');
+        this.resetCharacterEnhancement('right');
+        
         // 播放背景音乐
         this.backgroundMusic.play().catch(e => console.log('音乐播放失败:', e));
         
@@ -889,11 +966,27 @@ class PingPongGame {
         this.leftPaddle.y = this.canvas.height / 2 - this.paddleHeight / 2;
         this.rightPaddle.y = this.canvas.height / 2 - this.paddleHeight / 2;
         
+        // 确保游戏界面显示，包括计分板
+        this.gameUI.style.display = 'block';
+        document.querySelector('.scoreboard').style.display = 'flex'; // 重新显示计分板
+        this.canvas.style.display = 'block';
         this.gameOverScreen.style.display = 'none';
         this.detailedStats.style.display = 'none';
         this.showDetailedStats = false;
         this.gameState = 'playing';
         this.gameStartTime = Date.now();
+        
+        // 初始化自动移动系统
+        this.autoMove.lastControlTime = Date.now();
+        this.autoMove.enabled = false;
+        this.autoMove.targetY = this.rightPaddle.y;
+        this.autoMove.lastDecisionTime = 0;
+        this.autoMove.successRate = 0.5 + Math.random() * 0.49; // 50%-99%随机成功率
+        
+        // 重置小人增强状态
+        this.resetCharacterEnhancement('left');
+        this.resetCharacterEnhancement('right');
+        
         this.updateScore();
         this.gameLoop();
     }
@@ -1018,12 +1111,36 @@ class PingPongGame {
             this.leftPaddle.y += leftSpeed;
         }
         
-        // 右侧球拍控制 (上下箭头或左右箭头)
+        // 右侧球拍控制 (上下箭头或左右箭头) + 自动移动系统
+        let rightPlayerControlled = false;
+        
+        // 检测手动控制
         if ((this.keys['arrowup'] || this.keys['arrowleft']) && this.rightPaddle.y > 0) {
             this.rightPaddle.y -= rightSpeed;
+            rightPlayerControlled = true;
         }
         if ((this.keys['arrowdown'] || this.keys['arrowright']) && this.rightPaddle.y < this.canvas.height - this.rightPaddle.height) {
             this.rightPaddle.y += rightSpeed;
+            rightPlayerControlled = true;
+        }
+        
+        // 自动移动系统（仅当右侧玩家是唐林时）
+        if (this.rightPlayerName === '唐林') {
+            if (rightPlayerControlled) {
+                this.autoMove.lastControlTime = Date.now();
+                this.autoMove.enabled = false;
+            } else {
+                // 检查10秒内无控制
+                const timeSinceLastControl = Date.now() - this.autoMove.lastControlTime;
+                if (timeSinceLastControl > 10000) { // 10秒
+                    this.autoMove.enabled = true;
+                }
+            }
+            
+            // 执行自动移动
+            if (this.autoMove.enabled) {
+                this.updateAutoMove();
+            }
         }
         
         // 更新小人增强状态
@@ -1040,6 +1157,65 @@ class PingPongGame {
         
         // 右侧小人跟随右侧球拍
         this.rightCharacter.y = this.rightPaddle.y + this.rightPaddle.height / 2;
+    }
+    
+    updateAutoMove() {
+        const now = Date.now();
+        
+        // 随机成功率在50%-99%之间
+        if (now - this.autoMove.lastDecisionTime < this.autoMove.reactionDelay) {
+            return; // 还在反应延迟中
+        }
+        
+        // 计算球是否向右移动（朝向右侧球拍）
+        if (this.ball.dx > 0) {
+            // 随机决定是否成功接球
+            const shouldSucceed = Math.random() < this.autoMove.successRate;
+            
+            if (shouldSucceed) {
+                // 成功情况：预测球的位置并移动球拍
+                const ballTimeToReach = (this.rightPaddle.x - this.ball.x) / this.ball.dx;
+                const predictedBallY = this.ball.y + this.ball.dy * ballTimeToReach;
+                
+                // 设置目标位置为球拍中心对准球
+                this.autoMove.targetY = predictedBallY - this.rightPaddle.height / 2;
+                
+                // 限制在画面范围内
+                this.autoMove.targetY = Math.max(0, Math.min(this.canvas.height - this.rightPaddle.height, this.autoMove.targetY));
+            } else {
+                // 失败情况：故意移动到错误位置或不移动
+                const failureType = Math.random();
+                if (failureType < 0.3) {
+                    // 30%概率完全不动
+                    this.autoMove.targetY = this.rightPaddle.y;
+                } else if (failureType < 0.6) {
+                    // 30%概率向相反方向移动
+                    this.autoMove.targetY = this.ball.y > this.rightPaddle.y + this.rightPaddle.height / 2 
+                        ? this.rightPaddle.y - 100 
+                        : this.rightPaddle.y + 100;
+                } else {
+                    // 40%概率反应太慢，移动到球的当前位置而不是预测位置
+                    this.autoMove.targetY = this.ball.y - this.rightPaddle.height / 2;
+                }
+                
+                // 限制在画面范围内
+                this.autoMove.targetY = Math.max(0, Math.min(this.canvas.height - this.rightPaddle.height, this.autoMove.targetY));
+            }
+            
+            this.autoMove.lastDecisionTime = now;
+        }
+        
+        // 平滑移动到目标位置
+        const rightSpeed = this.rightPaddle.speed * this.rightCharacter.paddleSpeedMultiplier * 0.8; // 自动移动稍慢一些
+        const diff = this.autoMove.targetY - this.rightPaddle.y;
+        
+        if (Math.abs(diff) > 2) {
+            if (diff > 0 && this.rightPaddle.y < this.canvas.height - this.rightPaddle.height) {
+                this.rightPaddle.y += Math.min(rightSpeed, diff);
+            } else if (diff < 0 && this.rightPaddle.y > 0) {
+                this.rightPaddle.y += Math.max(-rightSpeed, diff);
+            }
+        }
     }
     
     updateBall() {
@@ -1439,28 +1615,43 @@ class PingPongGame {
     
     enhanceCharacter(side) {
         const character = side === 'left' ? this.leftCharacter : this.rightCharacter;
-        character.isEnhanced = true;
-        character.size = 2.0; // 变大一倍
-        character.paddleSpeedMultiplier = 1.2; // 击球速度增加20%
-        character.enhancedTimer = 0;
+        
+        // 最多累积5次增强
+        if (character.enhancementCount < 5) {
+            character.enhancementCount++;
+            character.isEnhanced = true;
+            
+            // 每次增强：击球速度增加20%，球拍长度增加10%，小人变大
+            character.paddleSpeedMultiplier = 1.0 + (character.enhancementCount * 0.2); // 每次+20%
+            character.paddleHeightMultiplier = 1.0 + (character.enhancementCount * 0.1); // 每次+10%
+            character.size = 2.0 + (character.enhancementCount * 0.2); // 小人逐渐变大
+            character.enhancedTimer = 0;
+            
+            // 应用球拍长度变化
+            const paddle = side === 'left' ? this.leftPaddle : this.rightPaddle;
+            paddle.height = this.paddleHeight * character.paddleHeightMultiplier;
+        }
     }
     
     updateCharacterEnhancement(character) {
-        if (character.isEnhanced) {
-            character.enhancedTimer++;
-            // 增强状态持续一段时间（比如600帧，约10秒）
-            if (character.enhancedTimer > 600) {
-                this.resetCharacterEnhancement(character === this.leftCharacter ? 'left' : 'right');
-            }
-        }
+        // 增强状态不再基于时间自动消失，只有失球后才会重置
+        // 保留此方法为了兼容性，但不执行任何逻辑
     }
     
     resetCharacterEnhancement(side) {
         const character = side === 'left' ? this.leftCharacter : this.rightCharacter;
+        const paddle = side === 'left' ? this.leftPaddle : this.rightPaddle;
+        
+        // 完全重置所有增强状态
         character.isEnhanced = false;
-        character.size = 1.0; // 恢复正常大小
+        character.size = 2.0; // 恢复原始大小
         character.paddleSpeedMultiplier = 1.0; // 恢复正常速度
+        character.paddleHeightMultiplier = 1.0; // 恢复正常球拍长度
         character.enhancedTimer = 0;
+        character.enhancementCount = 0; // 重置增强次数
+        
+        // 恢复球拍原始长度
+        paddle.height = this.paddleHeight;
     }
     
     drawOutOfBoundsAnimation() {
