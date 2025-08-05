@@ -74,7 +74,8 @@ class PingPongGame {
             animationFrame: 0,
             fireworks: [], // 礼花粒子数组
             winnerDance: { frame: 0, speed: 0.2 },
-            loserSad: { frame: 0, speed: 0.1 }
+            loserSad: { frame: 0, speed: 0.1 },
+            tears: [] // 眼泪粒子数组
         };
         
         // 台球桌配置（扩大canvas以容纳小人）
@@ -126,13 +127,16 @@ class PingPongGame {
         this.ball = {
             x: this.canvas.width / 2,
             y: this.canvas.height / 2,
-            dx: 6,
-            dy: 4,
+            dx: 4, // 减慢初始速度
+            dy: 3, // 减慢初始速度
             size: this.ballSize,
-            baseSpeed: 6,
+            baseSpeed: 4, // 减慢基础速度
             trail: [], // 拖尾效果
             color: this.getRandomBrightColor() // 随机鲜艳颜色
         };
+        
+        // 记录最后一次失分的玩家
+        this.lastLoser = null; // 'left' 或 'right'
         
         // 出界动画
         this.outOfBoundsAnimation = {
@@ -950,6 +954,11 @@ class PingPongGame {
                     this.startGame();
                 }
                 
+                // B按键回退（重置输入状态）
+                if (gamepad.buttons[1] && gamepad.buttons[1].pressed) {
+                    this.resetNameInputs();
+                }
+                
                 // 更新光标显示
                 this.updateCursorDisplay();
             } else {
@@ -1001,6 +1010,15 @@ class PingPongGame {
                     if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
                         this.hidePodium();
                     }
+                }
+            }
+            
+            // 排行榜界面的手柄控制
+            if (this.leaderboard.style.display === 'flex') {
+                // B按键或Select按键退出排行榜
+                if ((gamepad.buttons[1] && gamepad.buttons[1].pressed) ||
+                    (gamepad.buttons[8] && gamepad.buttons[8].pressed)) {
+                    this.hideLeaderboard();
                 }
             }
             
@@ -1232,6 +1250,7 @@ class PingPongGame {
         this.rightScore = 0;
         this.leftBonusScore = 0;
         this.rightBonusScore = 0;
+        this.lastLoser = null; // 重置失败者记录
         this.apples = []; // 清空所有苹果
         this.appleSystem.spawnTimer = 0;
         this.appleSystem.lastSpawnTime = Date.now();
@@ -1577,6 +1596,7 @@ class PingPongGame {
         if (this.ball.x < tableOffsetX) {
             this.triggerOutOfBoundsAnimation('left');
             this.rightScore++;
+            this.lastLoser = 'left'; // 记录左侧玩家失分
             this.triggerScoreAnimation(this.rightPlayerName, 'right');
             // 左侧失分，重置左侧小人增强状态
             this.resetCharacterEnhancement('left');
@@ -1587,6 +1607,7 @@ class PingPongGame {
         } else if (this.ball.x > tableOffsetX + tableWidth) {
             this.triggerOutOfBoundsAnimation('right');
             this.leftScore++;
+            this.lastLoser = 'right'; // 记录右侧玩家失分
             this.triggerScoreAnimation(this.leftPlayerName, 'left');
             // 右侧失分，重置右侧小人增强状态
             this.resetCharacterEnhancement('right');
@@ -1666,7 +1687,19 @@ class PingPongGame {
         
         this.ball.x = tableOffsetX + tableWidth / 2;
         this.ball.y = tableOffsetY + tableHeight / 2;
-        this.ball.dx = this.ball.baseSpeed * (Math.random() > 0.5 ? 1 : -1);
+        
+        // 根据最后失分的玩家决定发球方向
+        if (this.lastLoser === 'left') {
+            // 左侧失分，从左侧向右侧发球
+            this.ball.dx = Math.abs(this.ball.baseSpeed);
+        } else if (this.lastLoser === 'right') {
+            // 右侧失分，从右侧向左侧发球
+            this.ball.dx = -Math.abs(this.ball.baseSpeed);
+        } else {
+            // 游戏开始时随机方向
+            this.ball.dx = this.ball.baseSpeed * (Math.random() > 0.5 ? 1 : -1);
+        }
+        
         this.ball.dy = this.ball.baseSpeed * (Math.random() > 0.5 ? 1 : -1);
         this.ball.trail = [];
         this.ball.color = this.getRandomBrightColor(); // 每次重置都更换颜色
@@ -1972,6 +2005,7 @@ class PingPongGame {
         this.podiumState.countdownTimer = 0;
         this.podiumState.animationFrame = 0;
         this.podiumState.fireworks = [];
+        this.podiumState.tears = []; // 清空眼泪
         this.podiumState.winnerDance.frame = 0;
         this.podiumState.loserSad.frame = 0;
         
@@ -2018,8 +2052,16 @@ class PingPongGame {
             this.createFirework();
         }
         
+        // 创建眼泪粒子
+        if (this.podiumState.animationFrame % 30 === 0) {
+            this.createTears();
+        }
+        
         // 更新礼花粒子
         this.updateFireworks();
+        
+        // 更新眼泪粒子
+        this.updateTears();
     }
     
     createFirework() {
@@ -2060,6 +2102,42 @@ class PingPongGame {
         }
     }
     
+    createTears() {
+        // 创建失败者的眼泪粒子
+        const centerX = this.podiumCanvas.width / 2;
+        const baseY = this.podiumCanvas.height - 150;
+        const loserX = centerX - 150;
+        const loserY = baseY - 80 - 50;
+        
+        // 从失败者角色的眼睛位置创建眼泪
+        for (let i = 0; i < 2; i++) {
+            this.podiumState.tears.push({
+                x: loserX + (i === 0 ? -3 : 3), // 左右眼位置
+                y: loserY - 10, // 眼睛高度
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: 0.5 + Math.random() * 0.5,
+                life: 1.0,
+                decay: 0.01,
+                size: 2 + Math.random()
+            });
+        }
+    }
+    
+    updateTears() {
+        for (let i = this.podiumState.tears.length - 1; i >= 0; i--) {
+            const tear = this.podiumState.tears[i];
+            
+            tear.x += tear.vx;
+            tear.y += tear.vy;
+            tear.vy += 0.02; // 轻微重力
+            tear.life -= tear.decay;
+            
+            if (tear.life <= 0) {
+                this.podiumState.tears.splice(i, 1);
+            }
+        }
+    }
+    
     drawPodium() {
         if (!this.podiumCtx) return;
         
@@ -2075,6 +2153,9 @@ class PingPongGame {
         
         // 绘制礼花
         this.drawFireworks();
+        
+        // 绘制眼泪
+        this.drawTears();
     }
     
     drawPodiumPlatform() {
@@ -2195,6 +2276,20 @@ class PingPongGame {
             ctx.fillStyle = firework.color;
             ctx.beginPath();
             ctx.arc(firework.x, firework.y, firework.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+    
+    drawTears() {
+        const ctx = this.podiumCtx;
+        
+        for (const tear of this.podiumState.tears) {
+            ctx.save();
+            ctx.globalAlpha = tear.life;
+            ctx.fillStyle = '#87CEEB'; // 淡蓝色眼泪
+            ctx.beginPath();
+            ctx.arc(tear.x, tear.y, tear.size, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
         }
