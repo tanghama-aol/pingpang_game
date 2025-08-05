@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>唐林的乒乓球</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            transform: scale(0.75);
+            transform-origin: center center;
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            padding-top: 2vh;
+            box-sizing: border-box;
+        }
+        canvas {
+            background: #111;
+            display: none; /* 默认隐藏，游戏开始时显示 */
+        }
+        .ui {
+            position: relative;
+            text-align: center;
+        }
+        .ui.absolute {
+            position: fixed;
+            top: 2vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70vw;
+            height: calc(90vh);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(5px);
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .scoreboard {
+            display: none; /* 在开始界面隐藏计分板 */
+            justify-content: space-between;
+            align-items: center;
+            width: 900px;
+            padding: 20px 40px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 10px;
+            border: 2px solid #444;
+            margin-bottom: 10px;
+        }
+        .player-info {
+            text-align: center;
+            min-width: 240px;
+        }
+        .player-name {
+            font-size: 36px;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+        .player-score {
+            font-size: 72px;
+            font-weight: bold;
+            color: #fff;
+        }
+        .bonus-score {
+            font-size: 28px;
+            color: #ffff00;
+            margin-top: 2px;
+        }
+        .game-time {
+            text-align: center;
+            color: #ffff00;
+        }
+        .time-label {
+            font-size: 28px;
+            margin-bottom: 2px;
+        }
+        .time-display {
+            font-size: 40px;
+            font-weight: bold;
+        }
+        .game-title {
+            font-size: 112px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4, #45B7D1, #96CEB4, #FFEAA7);
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbow 3s ease-in-out infinite;
+            text-shadow: 2px 2px 8px rgba(255,255,255,0.3);
+        }
+        
+        @keyframes rainbow {
+            0%, 100% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+        .instructions {
+            font-size: 36px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            color: #96CEB4;
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #45B7D1;
+        }
+        .start-hint {
+            font-size: 64px;
+            font-weight: bold;
+            color: #00FF00;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #00FF00;
+            animation: blink 1.5s infinite, pulse 2s ease-in-out infinite;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            margin-top: 40px;
+        }
+        .scores-button {
+            font-size: 32px;
+            font-weight: bold;
+            color: #FFD700;
+            background: rgba(20, 20, 20, 0.9);
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #FFD700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .scores-button:hover {
+            background: rgba(40, 40, 40, 0.9);
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            padding: 80px;
+            border-radius: 10px;
+            border: 2px solid #fff;
+        }
+        .winner {
+            font-size: 72px;
+            margin-bottom: 20px;
+            color: #ffff00;
+        }
+        .final-score {
+            font-size: 48px;
+            margin-bottom: 30px;
+        }
+        .restart-hint {
+            font-size: 36px;
+        }
+        .player-setup {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .vs-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+            min-height: 120px;
+        }
+        .vs-player {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 200px;
+        }
+        .vs-label {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #FFD700;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .vs-text {
+            font-size: 72px;
+            font-weight: bold;
+            color: #FF6B6B;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            animation: bounce 2s ease-in-out infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            25% { transform: translateY(-8px); }
+            50% { transform: translateY(0); }
+            75% { transform: translateY(-4px); }
+        }
+        .player-input {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .player-input label {
+            font-size: 44px;
+            color: #4ECDC4;
+            min-width: 140px;
+            text-align: right;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .player-input input, .player-input select {
+            padding: 12px 16px;
+            font-size: 40px;
+            border: 3px solid #333;
+            border-radius: 8px;
+            background: #222;
+            color: #fff;
+            outline: none;
+            transition: border-color 0.3s, transform 0.2s;
+            min-width: 160px;
+        }
+        
+        .vs-input {
+            padding: 8px 10px;
+            font-size: 24px;
+            border: 3px solid #4ECDC4;
+            border-radius: 10px;
+            background: #1a1a1a;
+            color: #fff;
+            outline: none;
+            transition: all 0.3s;
+            min-width: 90px;
+            text-align: center;
+        }
+        
+        .vs-input:focus {
+            border-color: #FFD700;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .player-name-display {
+            font-size: 28px;
+            font-weight: bold;
+            padding: 8px 10px;
+            border-radius: 10px;
+            text-align: center;
+            min-width: 90px;
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            display: none;
+        }
+        .player-input input:focus, .player-input select:focus {
+            border-color: #ffff00;
+        }
+        .detailed-stats {
+            margin-top: 20px;
+            padding: 40px;
+            background: rgba(40,40,40,0.9);
+            border-radius: 8px;
+            border: 1px solid #666;
+        }
+        .detailed-stats h3 {
+            margin: 0 0 15px 0;
+            color: #ffff00;
+            font-size: 40px;
+            text-align: center;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 5px;
+        }
+        .stat-label {
+            font-size: 28px;
+            color: #ccc;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #fff;
+        }
+        .leaderboard {
+            position: fixed;
+            top: 3vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60vw;
+            height: calc(90vh);
+            display: none;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(5px);
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .leaderboard h2 {
+            font-size: 48px;
+            color: #FFD700;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .score-list {
+            width: 100%;
+            max-width: 800px;
+        }
+        .score-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            background: rgba(20, 20, 20, 0.8);
+            border-radius: 10px;
+            border: 1px solid #444;
+        }
+        .score-item.first {
+            border: 2px solid #FFD700;
+            background: rgba(40, 35, 0, 0.8);
+        }
+        .score-item.second {
+            border: 2px solid #C0C0C0;
+            background: rgba(30, 30, 30, 0.8);
+        }
+        .score-item.third {
+            border: 2px solid #CD7F32;
+            background: rgba(35, 25, 10, 0.8);
+        }
+        .score-rank {
+            font-size: 32px;
+            font-weight: bold;
+            color: #FFD700;
+            min-width: 60px;
+        }
+        .score-names {
+            flex: 1;
+            font-size: 24px;
+            color: #fff;
+            text-align: center;
+        }
+        .score-points {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4ECDC4;
+            min-width: 80px;
+            text-align: right;
+        }
+        .back-button {
+            font-size: 28px;
+            font-weight: bold;
+            color: #FF6B6B;
+            background: rgba(20, 20, 20, 0.9);
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #FF6B6B;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 30px;
+        }
+        .back-button:hover {
+            background: rgba(40, 40, 40, 0.9);
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
+        }
+        .podium-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+        .podium-overlay {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 201;
+        }
+        .podium-title {
+            font-size: 64px;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+            margin-bottom: 20px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        .podium-subtitle {
+            font-size: 48px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            margin-bottom: 40px;
+        }
+        .skip-hint {
+            font-size: 28px;
+            color: #ccc;
+            background: rgba(0,0,0,0.6);
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 2px solid #666;
+        }
+        @keyframes glow {
+            from { text-shadow: 2px 2px 8px rgba(255,215,0,0.8), 0 0 25px rgba(255,215,0,0.5); }
+            to { text-shadow: 2px 2px 8px rgba(255,215,0,0.8), 0 0 35px rgba(255,215,0,0.8); }
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="game-container">
+        <div class="ui" id="gameUI">
+            <div class="scoreboard">
+                <div class="player-info">
+                    <div class="player-name" id="leftPlayerDisplay">小鹏友</div>
+                    <div class="player-score" id="leftScore">0</div>
+                    <div class="bonus-score" id="leftBonusScore">奖励: 0</div>
+                </div>
+                <div class="game-time">
+                    <div class="time-label">游戏时间</div>
+                    <div class="time-display" id="gameTime">00:00</div>
+                </div>
+                <div class="player-info">
+                    <div class="player-name" id="rightPlayerDisplay">唐林</div>
+                    <div class="player-score" id="rightScore">0</div>
+                    <div class="bonus-score" id="rightBonusScore">奖励: 0</div>
+                </div>
+            </div>
+        </div>
+        
+        <canvas id="gameCanvas" width="1380" height="600"></canvas>
+    </div>
+    
+    <div class="ui absolute" id="startScreen" style="display: block;">
+        <div class="game-title">唐林的乒乓球</div>
+        <div class="player-setup">
+            <div class="vs-container"  style="display: flex; justify-content: space-between; gap: 30px; margin: 30px 0; flex-wrap: wrap;">
+                <div class="vs-player" style="flex: 1; min-width: 200px;">
+                    <input type="text" class="vs-input" id="leftPlayerName" value="小鹏友" maxlength="10">
+                    <div class="player-name-display" id="leftPlayerDisplay">小鹏友</div>
+                </div>
+                <div class="vs-text" style="flex: 1; min-width: 200px;">VS</div>
+                <div class="vs-player" style="flex: 1; min-width: 200px;">
+                    <input type="text" class="vs-input" id="rightPlayerName" value="唐林" maxlength="10">
+                    <div class="player-name-display" id="rightPlayerDisplay">唐林</div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; gap: 30px; margin: 30px 0; flex-wrap: wrap;">
+                <div class="player-input" style="flex: 1; min-width: 300px;">
+                    <label for="tableSize">桌子大小：</label>
+                    <select id="tableSize">
+                        <option value="standard">标准桌 (800x400)</option>
+                        <option value="large">大桌 (1000x500)</option>
+                    </select>
+                </div>
+                <div class="player-input" style="flex: 1; min-width: 300px;">
+                    <label for="background">桌面背景：</label>
+                    <select id="background">
+                        <option value="classic">经典绿色</option>
+                        <option value="dark">深色模式</option>
+                        <option value="blue">海蓝色</option>
+                        <option value="wood">木质纹理</option>
+                        <option value="neon">霓虹风格</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="instructions">
+            游戏玩法：<br>
+            左侧玩家：A键（上移）、Z键（下移）<br>
+            右侧玩家：↑键（上移）、↓键（下移）<br><br>
+            目标：将球打过对方，球未被接住则得分<br>
+            规则：先到21分者获胜
+        </div>
+        <div class="start-hint">按 SPACE 开始游戏</div>
+        <div class="scores-button" onclick="game.showLeaderboard()">查看分数排行榜</div>
+    </div>
+
+    <div class="leaderboard" id="leaderboard">
+        <h2 id="leaderboardTitle">🏆 最近10局对战记录</h2>
+        <div class="score-list" id="scoreList">
+            <!-- 分数列表将在这里动态生成 -->
+        </div>
+        <div class="back-button" onclick="game.hideLeaderboard()">返回开始界面</div>
+    </div>
+
+    <div class="podium-screen" id="podiumScreen" style="display: none;">
+        <canvas id="podiumCanvas" width="1200" height="800"></canvas>
+        <div class="podium-overlay">
+            <div class="podium-title">🏆 颁奖台 🏆</div>
+            <div class="podium-subtitle" id="podiumWinner"></div>
+            <div class="skip-hint">按任意键跳过 (自动跳转倒计时: <span id="podiumCountdown">20</span>s)</div>
+        </div>
+    </div>
+
+    <div class="game-over" id="gameOverScreen" style="display: none;">
+        <div class="winner" id="winnerText"></div>
+        <div class="final-score" id="finalScore"></div>
+        <div class="detailed-stats" id="detailedStats" style="display: none;">
+            <h3>详细统计</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">总比分</div>
+                    <div class="stat-value" id="totalScores"></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">常规得分</div>
+                    <div class="stat-value" id="regularScores"></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">奖励得分</div>
+                    <div class="stat-value" id="bonusScores"></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">游戏时长</div>
+                    <div class="stat-value" id="gameDuration"></div>
+                </div>
+            </div>
+        </div>
+        <div class="restart-hint">按 R 重新开始 | 按 ESC 退出 | 按 D 查看详细 | 按 L 查看排行榜</div>
+        <div class="scores-button" onclick="game.showLeaderboardFromGame()" style="margin-top: 20px;">查看分数排行榜</div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
