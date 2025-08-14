@@ -22,6 +22,7 @@ cp index.html dist/
 # 复制sound目录到dist目录
 echo "复制音频文件..."
 cp -r sound dist/
+cp -r pic dist/
 
 # 使用terser压缩和混淆JavaScript文件
 echo "压缩和混淆JavaScript文件..."

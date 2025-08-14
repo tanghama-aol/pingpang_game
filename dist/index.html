@@ -41,14 +41,14 @@
         }
         .ui.absolute {
             position: fixed;
-            top: 2vh;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 70vw;
-            height: calc(90vh);
+            top: 0;
+            left: 0;
+            transform: none;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
+            justify-content: center;
             align-items: center;
             text-align: center;
             z-index: 100;
@@ -488,7 +488,7 @@
         <canvas id="gameCanvas" width="1380" height="600"></canvas>
     </div>
     
-    <div class="ui absolute" id="startScreen" style="display: block;">
+    <div class="ui absolute" id="startScreen" style="display: block; background-image: url('pic/开始界面背景.png'); background-size: cover; background-position: center; background-repeat: no-repeat;">
         <div class="game-title">唐林的乒乓球</div>
         <div class="player-setup">
             <div class="vs-container"  style="display: flex; justify-content: space-between; gap: 30px; margin: 30px 0; flex-wrap: wrap;">

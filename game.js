@@ -188,8 +188,11 @@ class PingPongGame {
         this.hitSound = new Audio('sound/hit.mp3');
         this.hitSound.volume = 0.8; // 设置音量较大
         this.backgroundMusic = new Audio('sound/比赛的一天.mp3');
-        this.backgroundMusic.volume = 0.6;
+        this.backgroundMusic.volume = 0.4 ;
         this.backgroundMusic.loop = true; // 循环播放
+        this.startMusic = new Audio('sound/start.mp3'); // 开始音乐
+        this.startMusic.volume = 0.6;
+        this.startMusic.loop = true; // 循环播放
         this.leftLostSound = new Audio('sound/left_lost_mp3.mp3');
         this.leftLostSound.volume = 0.7;
         this.rightLostSound = new Audio('sound/right_lost.mp3');
@@ -249,6 +252,8 @@ class PingPongGame {
     
     startScreenLoop() {
         if (this.gameState === 'start') {
+            this.startMusic.play().catch(e => console.log('音效播放失败:', e));
+            this.backgroundMusic.pause(); // 确保开始界面没有背景音乐
             this.handleGamepadInput(); // 处理手柄输入和光标显示
             requestAnimationFrame(() => this.startScreenLoop());
         }
@@ -1238,7 +1243,8 @@ class PingPongGame {
         this.resetCharacterEnhancement('left');
         this.resetCharacterEnhancement('right');
         
-        // 播放背景音乐
+        // 停止开始界面音乐并播放游戏背景音乐
+        this.startMusic.pause();
         this.backgroundMusic.play().catch(e => console.log('音乐播放失败:', e));
         
         this.updateScore();
@@ -1285,6 +1291,7 @@ class PingPongGame {
         this.resetCharacterEnhancement('left');
         this.resetCharacterEnhancement('right');
         
+        this.backgroundMusic.play().catch(e => console.log('音乐播放失败:', e));
         this.updateScore();
         this.gameLoop();
     }
@@ -1726,6 +1733,9 @@ class PingPongGame {
     endGame() {
         this.gameState = 'podium';
         this.gameUI.style.display = 'none';
+        
+        this.backgroundMusic.pause();
+        this.backgroundMusic.currentTime = 0;
         
         // 播放结束一局的音效
         this.gameEndSound.currentTime = 0;
@@ -2322,4 +2332,4 @@ class PingPongGame {
 }
 
 // 初始化游戏
-var game = new PingPongGame();
+var game = new PingPongGame(); 
